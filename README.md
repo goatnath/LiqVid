@@ -1,39 +1,59 @@
 # LiqVid
 
-LiqVid is a 3D Computational Fluid Dynamics (CFD) engine written entirely from scratch in Rust, paired with a dynamic React/Three.js frontend visualizer. 
+A small 3D fluid simulation project written from scratch in Rust, with a React/Three.js frontend for visualization. It solves the incompressible Navier-Stokes equations on a structured grid using a simplified pressure-projection (PISO-style) approach, loosely inspired by OpenFOAM's `icoFoam` solver.
 
-It is heavily inspired by the architecture of [OpenFOAM](https://www.openfoam.com/), specifically the `icoFoam` solver and the PISO (Pressure Implicit with Splitting of Operator) algorithm. 
+This is a learning/portfolio project, not a production CFD tool. It's meant to demonstrate an understanding of the core numerical building blocks of a Navier-Stokes solver, not to compete with OpenFOAM, SU2, or other mature CFD software.
 
-## Core Physics Features
-- **3D Structured Mesh Generation**: A custom grid system that maps 3D physical space into flat 1D arrays for high-performance memory access.
-- **Navier-Stokes Solver**: A full implementation of the PISO algorithm for incompressible flow.
-  - **Inertia (Convection)**: Solves $(\mathbf{U} \cdot \nabla) \mathbf{U}$ to transport momentum forward.
-  - **Viscous Diffusion (Laplacian)**: Simulates fluid friction using the kinematic viscosity ($\nu \nabla^2 \mathbf{U}$).
-  - **Mass Conservation**: A custom iterative Jacobi solver for the Pressure Poisson equation ($\nabla^2 p = S$) to strictly enforce divergence-free flow.
-- **STL Geometry & Voxelization**: Dynamically loads 3D `.stl` CAD models, uses the Möller–Trumbore ray-casting algorithm to voxelize the solid, and mathematically enforces No-Slip Boundary Conditions ($\mathbf{U} = 0$) inside the geometry.
+## What it does
 
-## UI & Visualizer Features
-- **React + Three.js Frontend**: A fully interactive 3D web application to configure and view the simulation.
-- **Interactive Boundary Conditions**: Double-click anywhere on your 3D model to dynamically inject flow inlets.
-- **Real-Time Heatmap Streaming**: The Rust backend extracts 2D cross-sections of the 3D velocity field and streams them via Server-Sent Events (SSE) to the browser.
-- **Dynamic Opacity**: The heatmap automatically maps fluid velocity to HSL colors and opacity, allowing you to see high-speed fluid jets crashing into and flowing around your STL models in real time.
+- **Structured 3D grid**: a uniform grid mapped to flat 1D arrays for the velocity and pressure fields.
+- **Momentum solve**: convection and viscous diffusion terms for the velocity field.
+- **Pressure Poisson equation**: solved with Jacobi iteration to enforce a divergence-free velocity field.
+- **STL geometry support**: loads `.stl` files, voxelizes them against the grid using Möller–Trumbore ray-triangle intersection, and applies no-slip boundary conditions on solid cells.
+- **Live visualization**: the Rust backend streams 2D cross-sections of the velocity field over Server-Sent Events; the frontend renders them as a real-time heatmap and lets you click to place inlets.
+
+## What it doesn't do (yet)
+
+Being upfront about this because "CFD solver" can imply more than what's here:
+
+- **No convergence/accuracy validation.** There's no comparison against known analytical solutions or benchmark cases (e.g. lid-driven cavity), so correctness is "it runs and looks physically plausible," not verified.
+- **Jacobi iteration for pressure is slow to converge.** No multigrid, no conjugate gradient — fine for a small demo grid, not scalable.
+- **Single-threaded, uniform grid only.** No adaptive mesh, no parallelization.
+- **No automated tests.**
+
+These are the natural next steps if this becomes more than a demo.
 
 ## Getting Started
 
-Make sure you have [Rust](https://rustup.rs/) and [Node.js](https://nodejs.org/) installed.
+Requires [Rust](https://rustup.rs/) and [Node.js](https://nodejs.org/).
 
 ```bash
 # Clone the repository
 git clone https://github.com/goatnath/LiqVid.git
 cd LiqVid
 
-# Start the Rust CFD Engine (Backend)
+# Start the Rust solver (backend)
 cargo run
 
-# In a new terminal, start the React Visualizer (Frontend)
+# In a separate terminal, start the visualizer (frontend)
 cd ui
 npm install
 npm run dev
 ```
 
-Open your browser to the local Vite URL (usually `http://localhost:5173`). Upload a `.stl` file, click to place an inlet, and hit "Run Simulation" to watch the physics unfold!
+Open the local Vite URL (usually `http://localhost:5173`), upload an `.stl` file, click on the model to place a flow inlet, and run the simulation to see the velocity field update live.
+
+## Why I built this
+
+I wanted to learn the deep mathematics and architecture of Computational Fluid Dynamics (CFD) by building it myself, rather than just treating industry-standard software like OpenFOAM as a magical black box. Writing the momentum predictor and mass conservation loops from scratch was the best way to truly understand what happens under the hood of a Navier-Stokes solver.
+
+## Roadmap / possible next steps
+
+- [ ] Validate against a known benchmark flow (e.g. lid-driven cavity at low Reynolds number)
+- [ ] Replace Jacobi with conjugate gradient or multigrid for the pressure solve
+- [ ] Add unit tests for the mesh, boundary conditions, and Poisson solver
+- [ ] Support non-uniform / adaptive grids
+
+## License
+
+MIT License
