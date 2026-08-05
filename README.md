@@ -25,23 +25,45 @@ These are the natural next steps if this becomes more than a demo.
 
 ## Getting Started
 
-Requires [Rust](https://rustup.rs/) and [Node.js](https://nodejs.org/).
+### Prerequisites
+
+| Tool | Minimum Version | Install |
+|------|----------------|---------|
+| **Rust** | 1.85+ (edition 2024) | [rustup.rs](https://rustup.rs/) |
+| **Node.js** | 18+ | [nodejs.org](https://nodejs.org/) |
+
+Check your versions:
 
 ```bash
-# Clone the repository
+rustc --version   # should be 1.85.0 or higher
+node --version    # should be v18 or higher
+```
+
+### Quick Start
+
+You'll need **two terminals** — one for the Rust solver backend and one for the React frontend.
+
+**Terminal 1 — Rust solver:**
+
+```bash
 git clone https://github.com/goatnath/LiqVid.git
 cd LiqVid
-
-# Start the Rust solver (backend)
 cargo run
+```
 
-# In a separate terminal, start the visualizer (frontend)
-cd ui
+Wait until you see `Server listening on http://127.0.0.1:3000` before starting the frontend.
+
+**Terminal 2 — React frontend:**
+
+```bash
+cd LiqVid/ui
 npm install
 npm run dev
 ```
 
 Open the local Vite URL (usually `http://localhost:5173`), upload an `.stl` file, click on the model to place a flow inlet, and run the simulation to see the velocity field update live.
+
+> **Don't have an STL file?** Grab a free one from [Thingiverse](https://www.thingiverse.com/) or search for "Stanford Bunny STL" — any watertight mesh will work. Simple geometry (cubes, pipes) gives the clearest results on the 20×20×20 demo grid.
 
 ## Why I built this
 
