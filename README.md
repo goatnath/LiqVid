@@ -20,6 +20,7 @@ Being upfront about this because "CFD solver" can imply more than what's here:
 - **Jacobi iteration for pressure is slow to converge.** No multigrid, no conjugate gradient — fine for a small demo grid, not scalable.
 - **Single-threaded, uniform grid only.** No adaptive mesh, no parallelization.
 - **No automated tests.**
+- **Proper UI rendering of continuous fluid bodies.** Currently, fluid flow is rendered as many small spheres rather than a visually continuous body in the 3D viewer.
 
 These are the natural next steps if this becomes more than a demo.
 
