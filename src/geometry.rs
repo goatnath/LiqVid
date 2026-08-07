@@ -4,13 +4,15 @@ use std::fs::OpenOptions;
 use stl_io::Triangle;
 
 pub struct Geometry {
-    pub is_solid: Vec<bool>, // true if the cell is solid (inside the STL or part of wall)
+    pub is_solid: Vec<bool>,   // true if the cell center is inside the STL
+    pub is_surface: Vec<bool>, // true if this fluid cell is adjacent to a solid cell
 }
 
 impl Geometry {
     pub fn new(mesh: &Mesh) -> Self {
         Self {
             is_solid: vec![false; mesh.num_cells()],
+            is_surface: vec![false; mesh.num_cells()],
         }
     }
 
@@ -54,6 +56,36 @@ impl Geometry {
                 }
             }
         }
+
+        // Build surface adjacency map: a fluid cell is "surface" if it touches a solid cell
+        for i in 0..mesh.nx {
+            for j in 0..mesh.ny {
+                for k in 0..mesh.nz {
+                    let c_idx = mesh.cell_idx(i, j, k);
+                    if self.is_solid[c_idx] {
+                        continue; // Only fluid cells can be surface cells
+                    }
+                    // Check 6 face-neighbors
+                    let neighbors = [
+                        if i > 0 { Some(mesh.cell_idx(i - 1, j, k)) } else { None },
+                        if i < mesh.nx - 1 { Some(mesh.cell_idx(i + 1, j, k)) } else { None },
+                        if j > 0 { Some(mesh.cell_idx(i, j - 1, k)) } else { None },
+                        if j < mesh.ny - 1 { Some(mesh.cell_idx(i, j + 1, k)) } else { None },
+                        if k > 0 { Some(mesh.cell_idx(i, j, k - 1)) } else { None },
+                        if k < mesh.nz - 1 { Some(mesh.cell_idx(i, j, k + 1)) } else { None },
+                    ];
+                    for neighbor in &neighbors {
+                        if let Some(n_idx) = neighbor {
+                            if self.is_solid[*n_idx] {
+                                self.is_surface[c_idx] = true;
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         Ok(())
     }
 }

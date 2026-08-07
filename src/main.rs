@@ -92,14 +92,14 @@ async fn run_simulation(
             .await;
         tokio::time::sleep(std::time::Duration::from_millis(500)).await;
 
-        let nx = 20;
-        let ny = 20;
-        let nz = 20;
+        let nx = 50;
+        let ny = 50;
+        let nz = 50;
 
         let mesh = Mesh::new(nx, ny, nz, 100.0, 100.0, 100.0);
         let mut p = VolScalarField::new(&mesh, 0.0);
         let mut u = VolVectorField::new(&mesh, Vector3::new(0.0, 0.0, 0.0));
-        let dt = 0.01;
+        let dt = 0.1;
 
         let mut geom = geometry::Geometry::new(&mesh);
 
@@ -115,26 +115,6 @@ async fn run_simulation(
             }
         }
 
-        for inlet in &payload.inlets {
-            let shifted_x = inlet.position.x + 50.0;
-            let shifted_y = inlet.position.y + 50.0;
-            let shifted_z = inlet.position.z + 50.0;
-
-            let i = ((shifted_x / mesh.dx).floor() as usize).clamp(0, nx - 1);
-            let j = ((shifted_y / mesh.dy).floor() as usize).clamp(0, ny - 1);
-            let k = ((shifted_z / mesh.dz).floor() as usize).clamp(0, nz - 1);
-
-            let idx = mesh.cell_idx(i, j, k);
-            u.internal_field[idx] =
-                Vector3::new(inlet.velocity.x, inlet.velocity.y, inlet.velocity.z);
-
-            let _ = tx
-                .send(Ok(Event::default().data(format!(
-                    "Injected velocity spike at cell ({}, {}, {})",
-                    i, j, k
-                ))))
-                .await;
-        }
         let _ = tx
             .send(Ok(
                 Event::default().data("Starting PISO Mass Conservation Loop....")
@@ -142,10 +122,37 @@ async fn run_simulation(
             .await;
         tokio::time::sleep(std::time::Duration::from_millis(200)).await;
 
-        for step in 1..=50 {
+        for step in 1..=100 {
+            // Re-inject inlet velocities EVERY timestep over a small region
+            for inlet in &payload.inlets {
+                let shifted_x = inlet.position.x + 50.0;
+                let shifted_y = inlet.position.y + 50.0;
+                let shifted_z = inlet.position.z + 50.0;
+
+                let ii = ((shifted_x / mesh.dx).floor() as usize).clamp(1, nx - 2);
+                let jj = ((shifted_y / mesh.dy).floor() as usize).clamp(1, ny - 2);
+                let kk = ((shifted_z / mesh.dz).floor() as usize).clamp(1, nz - 2);
+
+                let vel = Vector3::new(inlet.velocity.x, inlet.velocity.y, inlet.velocity.z);
+                // Inject over a 3×3×3 cluster so the source is strong enough to propagate
+                for di in 0..3_usize {
+                    for dj in 0..3_usize {
+                        for dk in 0..3_usize {
+                            let ci = (ii + di).min(nx - 1);
+                            let cj = (jj + dj).min(ny - 1);
+                            let ck = (kk + dk).min(nz - 1);
+                            let idx = mesh.cell_idx(ci, cj, ck);
+                            if !geom.is_solid[idx] {
+                                u.internal_field[idx] = vel;
+                            }
+                        }
+                    }
+                }
+            }
+
             let nu = payload.kinematicViscosity;
-            let laplacian_u = fvc::laplacian_vector(&u, &mesh);
-            let convection_u = fvc::convect(&u, &mesh);
+            let laplacian_u = fvc::laplacian_vector(&u, &mesh, &geom);
+            let convection_u = fvc::convect(&u, &mesh, &geom);
 
             for i in 0..mesh.num_cells() {
                 u.internal_field[i] += (laplacian_u.internal_field[i] * nu - convection_u.internal_field[i]) * dt;
@@ -172,7 +179,7 @@ async fn run_simulation(
                     max_div_u = div_val.abs();
                 }
             }
-            piso::solve_pressure_poisson(&mut p, &mesh, &source, 20);
+            piso::solve_pressure_poisson(&mut p, &mesh, &source, 100);
 
             let grad_p = fvc::grad(&p, &mesh);
 
@@ -189,11 +196,48 @@ async fn run_simulation(
                 }
             }
 
-            let msg = format!("Time Step {:02}: Max Divergence = {:.6}", step, max_div_u);
+            let msg = format!("Time Step {:03}: Max Divergence = {:.6}", step, max_div_u);
             if tx.send(Ok(Event::default().data(msg))).await.is_err() {
                 println!("Client disconnected. Halting simulation early.");
                 break;
             }
+
+            // --- STREAM LIVE 3D VOLUMETRIC DATA ---
+            // Send a [FRAME] message every 2 timesteps for real-time animation in the UI
+            if step % 2 == 0 {
+                let mut frame_cells = Vec::new();
+                for fi in 0..mesh.nx {
+                    for fj in 0..mesh.ny {
+                        for fk in 0..mesh.nz {
+                            let fidx = mesh.cell_idx(fi, fj, fk);
+                            let vel = u.internal_field[fidx];
+                            let mag = (vel.x * vel.x + vel.y * vel.y + vel.z * vel.z).sqrt();
+                            if mag > 0.001 {
+                                frame_cells.push(serde_json::json!({
+                                    "x": (fi as f64 + 0.5) * mesh.dx - 50.0,
+                                    "y": (fj as f64 + 0.5) * mesh.dy - 50.0,
+                                    "z": (fk as f64 + 0.5) * mesh.dz - 50.0,
+                                    "mag": mag,
+                                    "vx": vel.x,
+                                    "vy": vel.y,
+                                    "vz": vel.z
+                                }));
+                            }
+                        }
+                    }
+                }
+                if !frame_cells.is_empty() {
+                    if let Ok(frame_json) = serde_json::to_string(&serde_json::json!({
+                        "step": step,
+                        "cells": frame_cells,
+                        "cell_size": mesh.dx
+                    })) {
+                        let msg = format!("[FRAME]{}", frame_json);
+                        let _ = tx.send(Ok(Event::default().data(msg))).await;
+                    }
+                }
+            }
+
             tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
         }
 

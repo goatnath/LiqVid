@@ -50,6 +50,7 @@ function App() {
   
   // CFD Heatmap slice data
   const [sliceData, setSliceData] = useState(null);
+  const [frameData, setFrameData] = useState(null);
 
   const [stlBase64, setStlBase64] = useState(null);
 
@@ -158,6 +159,7 @@ function App() {
 
     setLogs([]);
     setSliceData(null);
+    setFrameData(null);
     setIsSimulating(true);
 
     try {
@@ -196,7 +198,15 @@ function App() {
             const data = line.replace('data: ', '');
             
             // Check if this is the JSON heatmap slice payload
-            if (data.startsWith('[SLICE]')) {
+            if (data.startsWith('[FRAME]')) {
+              try {
+                const frameJson = data.replace('[FRAME]', '');
+                const frame = JSON.parse(frameJson);
+                setFrameData(frame);
+              } catch (e) {
+                console.error("Failed to parse frame data", e);
+              }
+            } else if (data.startsWith('[SLICE]')) {
               try {
                 const sliceJson = data.replace('[SLICE]', '');
                 const slice = JSON.parse(sliceJson);
@@ -224,7 +234,7 @@ function App() {
   };
 
   // Helper to calculate maximum magnitude in the slice to normalize colors
-  const maxMag = sliceData ? Math.max(...sliceData.map(c => c.mag)) : 1;
+  const maxMag = frameData ? Math.max(...frameData.cells.map(c => c.mag), 0.001) : 1;
 
   return (
     <div className="app-container">
@@ -442,9 +452,7 @@ function App() {
             
             <axesHelper args={[50]} />
             
-            <Center>
-              <StlModel fileUrl={stlFileUrl} onPointSelect={handlePointSelect} onDoubleClick={handleDoubleClick} />
-            </Center>
+            <StlModel fileUrl={stlFileUrl} onPointSelect={handlePointSelect} onDoubleClick={handleDoubleClick} />
             
             {/* Render a bright neon sphere for the currently active velocity prompt */}
             {velocityPrompt && (
@@ -466,25 +474,57 @@ function App() {
               </mesh>
             ))}
 
-            {/* CFD HEATMAP RENDERER (Slice at Z = 10 in mesh) */}
-            {sliceData && sliceData.map((cell, index) => {
-              // Normalize magnitude from 0.0 (blue) to 1.0 (red)
+            {/* LIVE 3D FLOW VISUALIZATION — Smooth spheres with emissive glow */}
+            {frameData && frameData.cells && frameData.cells.map((cell, index) => {
               const normalized = maxMag > 0 ? cell.mag / maxMag : 0;
-              // Hue: 240 is blue, 0 is red
               const hue = (1 - normalized) * 240;
               const color = `hsl(${hue}, 100%, 50%)`;
+              const emissiveColor = `hsl(${hue}, 100%, 40%)`;
+              const opacity = Math.min(0.9, normalized * 2.5);
+              if (opacity < 0.02) return null;
               
-              // Scale opacity based on velocity. Slow fluid = invisible, Fast fluid = opaque.
-              const opacity = Math.min(0.8, normalized * 1.5);
+              const cellSize = frameData.cell_size || 5.0;
+              const radius = cellSize * 0.55;
               
-              // Hide cells with virtually no velocity to keep the view clean
-              if (opacity < 0.05) return null;
-
               return (
-                // Shift forward to Z=2 so it hovers slightly above the STL and stops glitching (Z-fighting)
+                <mesh key={`flow-${index}`} position={[cell.x, cell.y, cell.z]}>
+                  <sphereGeometry args={[radius, 12, 8]} />
+                  <meshStandardMaterial 
+                    color={color} 
+                    emissive={emissiveColor}
+                    emissiveIntensity={0.4 + normalized * 0.6}
+                    transparent 
+                    opacity={opacity} 
+                    depthWrite={false}
+                    roughness={0.2}
+                    metalness={0.1}
+                  />
+                </mesh>
+              );
+            })}
+
+            {/* STATIC SLICE FALLBACK (shown only when no live frame data) */}
+            {!frameData && sliceData && sliceData.map((cell, index) => {
+              const sliceMaxMag = Math.max(...sliceData.map(c => c.mag), 0.001);
+              const normalized = sliceMaxMag > 0 ? cell.mag / sliceMaxMag : 0;
+              const hue = (1 - normalized) * 240;
+              const color = `hsl(${hue}, 100%, 50%)`;
+              const emissiveColor = `hsl(${hue}, 100%, 40%)`;
+              const opacity = Math.min(0.85, normalized * 2.0);
+              if (opacity < 0.02) return null;
+              return (
                 <mesh key={`cell-${index}`} position={[cell.x, cell.y, 2]}>
-                  <planeGeometry args={[4.8, 4.8]} />
-                  <meshBasicMaterial color={color} transparent opacity={opacity} depthWrite={false} />
+                  <circleGeometry args={[2.4, 16]} />
+                  <meshStandardMaterial 
+                    color={color} 
+                    emissive={emissiveColor}
+                    emissiveIntensity={0.3 + normalized * 0.5}
+                    transparent 
+                    opacity={opacity} 
+                    depthWrite={false}
+                    roughness={0.3}
+                    side={2}
+                  />
                 </mesh>
               );
             })}
