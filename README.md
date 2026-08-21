@@ -8,7 +8,7 @@ This is a learning/portfolio project, not a production CFD tool. It's meant to d
 
 - **Structured 3D grid**: a uniform grid mapped to flat 1D arrays for the velocity and pressure fields.
 - **Momentum solve**: convection and viscous diffusion terms for the velocity field.
-- **Pressure Poisson equation**: solved with Jacobi iteration to enforce a divergence-free velocity field.
+- **Pressure Poisson equation**: solved with a matrix-free **Conjugate Gradient (CG)** solver to enforce a divergence-free velocity field.
 - **STL geometry support**: loads `.stl` files, voxelizes them against the grid using Möller–Trumbore ray-triangle intersection, and applies no-slip boundary conditions on solid cells.
 - **Live visualization**: the Rust backend streams 2D cross-sections of the velocity field over Server-Sent Events; the frontend renders them as a real-time heatmap and lets you click to place inlets.
 
@@ -17,7 +17,7 @@ This is a learning/portfolio project, not a production CFD tool. It's meant to d
 Being upfront about this because "CFD solver" can imply more than what's here:
 
 - **No convergence/accuracy validation.** There's no comparison against known analytical solutions or benchmark cases (e.g. lid-driven cavity), so correctness is "it runs and looks physically plausible," not verified.
-- **Jacobi iteration for pressure is slow to converge.** No multigrid, no conjugate gradient — fine for a small demo grid, not scalable.
+- **No multigrid / advanced preconditioning.** While Conjugate Gradient is implemented for the pressure solve, very large grids would benefit from geometric or algebraic multigrid (AMG) preconditioning.
 - **Single-threaded, uniform grid only.** No adaptive mesh, no parallelization.
 - **No automated tests.**
 - **Proper UI rendering of continuous fluid bodies.** Currently, fluid flow is rendered as many small spheres rather than a visually continuous body in the 3D viewer.
@@ -73,7 +73,8 @@ I wanted to learn the deep mathematics and architecture of Computational Fluid D
 ## Roadmap / possible next steps
 
 - [ ] Validate against a known benchmark flow (e.g. lid-driven cavity at low Reynolds number)
-- [ ] Replace Jacobi with conjugate gradient or multigrid for the pressure solve
+- [x] Replace Jacobi with conjugate gradient for the pressure solve
+- [ ] Add preconditioned conjugate gradient (PCG) or multigrid for large grids
 - [ ] Add unit tests for the mesh, boundary conditions, and Poisson solver
 - [ ] Support non-uniform / adaptive grids
 

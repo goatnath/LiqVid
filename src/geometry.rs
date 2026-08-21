@@ -1,7 +1,5 @@
 use crate::mesh::Mesh;
 use nalgebra::{Point3, Vector3};
-use std::fs::OpenOptions;
-use stl_io::Triangle;
 
 pub struct Geometry {
     pub is_solid: Vec<bool>,   // true if the cell center is inside the STL

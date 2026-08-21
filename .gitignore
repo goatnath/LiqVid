@@ -1,2 +1,17 @@
 /target
 Cargo.lock
+
+# LaTeX files & artifacts
+*.aux
+*.log
+*.out
+*.toc
+*.synctex.gz
+*.fls
+*.fdb_latexmk
+*.tex
+*.pdf
+
+# Scratch / test files
+test_out.txt
+test_sse.py

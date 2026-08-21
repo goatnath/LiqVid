@@ -194,8 +194,8 @@ function App() {
         buffer = lines.pop(); // Keep the last incomplete chunk in the buffer
 
         for (let line of lines) {
-          if (line.startsWith('data: ')) {
-            const data = line.replace('data: ', '');
+          if (line.startsWith('data:')) {
+            const data = line.substring(line.indexOf(':') + 1).trimStart();
             
             // Check if this is the JSON heatmap slice payload
             if (data.startsWith('[FRAME]')) {
@@ -475,13 +475,13 @@ function App() {
             ))}
 
             {/* LIVE 3D FLOW VISUALIZATION — Smooth spheres with emissive glow */}
-            {frameData && frameData.cells && frameData.cells.map((cell, index) => {
+            {frameData && frameData.cells && frameData.cells.filter(c => maxMag > 0 && c.mag / maxMag > 0.05).slice(0, 1000).map((cell, index) => {
               const normalized = maxMag > 0 ? cell.mag / maxMag : 0;
               const hue = (1 - normalized) * 240;
               const color = `hsl(${hue}, 100%, 50%)`;
               const emissiveColor = `hsl(${hue}, 100%, 40%)`;
               const opacity = Math.min(0.9, normalized * 2.5);
-              if (opacity < 0.02) return null;
+              if (opacity < 0.1) return null;
               
               const cellSize = frameData.cell_size || 5.0;
               const radius = cellSize * 0.55;

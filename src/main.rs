@@ -35,7 +35,8 @@ pub struct InletRequest {
 
 #[derive(Deserialize, Debug)]
 pub struct SimulationRequest {
-    pub kinematicViscosity: f64,
+    #[serde(rename = "kinematicViscosity")]
+    pub kinematic_viscosity: f64,
     pub density: f64,
     pub inlets: Vec<InletRequest>,
     pub stl_base64: Option<String>,
@@ -71,7 +72,7 @@ async fn run_simulation(
 ) -> Sse<impl Stream<Item = Result<Event, Infallible>>> {
     println!("\n--- NEW SIMULATION REQUEST ---");
     println!("Density: {}", payload.density);
-    println!("Viscosity: {}", payload.kinematicViscosity);
+    println!("Viscosity: {}", payload.kinematic_viscosity);
     println!("Active Inlets: {}", payload.inlets.len());
 
     for inlet in &payload.inlets {
@@ -150,7 +151,7 @@ async fn run_simulation(
                 }
             }
 
-            let nu = payload.kinematicViscosity;
+            let nu = payload.kinematic_viscosity;
             let laplacian_u = fvc::laplacian_vector(&u, &mesh, &geom);
             let convection_u = fvc::convect(&u, &mesh, &geom);
 
