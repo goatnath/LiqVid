@@ -1,5 +1,7 @@
 # LiqVid
 
+[![CI](https://github.com/goatnath/LiqVid/actions/workflows/rust.yml/badge.svg)](https://github.com/goatnath/LiqVid/actions/workflows/rust.yml)
+
 A small 3D fluid simulation project written from scratch in Rust, with a React/Three.js frontend for visualization. It solves the incompressible Navier-Stokes equations on a structured grid using a simplified pressure-projection (PISO-style) approach, loosely inspired by OpenFOAM's `icoFoam` solver.
 
 This is a learning/portfolio project, not a production CFD tool. It's meant to demonstrate an understanding of the core numerical building blocks of a Navier-Stokes solver, not to compete with OpenFOAM, SU2, or other mature CFD software.
