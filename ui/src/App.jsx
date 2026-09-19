@@ -1,69 +1,122 @@
-import { useState, useRef } from 'react';
-import { Upload, Box, Plus, Trash2, Terminal } from 'lucide-react';
-import { Canvas, useLoader } from '@react-three/fiber';
-import { OrbitControls, Center, Environment } from '@react-three/drei';
-import { STLLoader } from 'three/examples/jsm/loaders/STLLoader';
+import { useState, useRef, useMemo, useCallback } from 'react';
+import { getCfdColor } from './colormap';
+import Toolbar from './Toolbar';
+import PipelineBrowser from './PipelineBrowser';
+import PropertiesPanel from './PropertiesPanel';
+import Viewport from './Viewport';
+import StatusBar from './StatusBar';
 
-// This component handles loading and displaying the STL geometry
-function StlModel({ fileUrl, onPointSelect, onDoubleClick }) {
-  const geometry = useLoader(STLLoader, fileUrl);
-  return (
-    <mesh 
-      geometry={geometry} 
-      onPointerDown={(e) => {
-        e.stopPropagation();
-        onPointSelect(e.point);
-      }}
-      onDoubleClick={(e) => {
-        e.stopPropagation();
-        onDoubleClick(e.point);
-      }}
-    >
-      <meshStandardMaterial color="#333333" wireframe={false} roughness={0.5} metalness={0.2} />
-    </mesh>
-  );
-}
-
-function App() {
+export default function App() {
   const fileInputRef = useRef(null);
+  const abortRef = useRef(null);
   const [stlFileUrl, setStlFileUrl] = useState(null);
+  const [stlBase64, setStlBase64] = useState(null);
 
-  const [fluidProperties, setFluidProperties] = useState({
-    kinematicViscosity: 0.00001,
-    density: 1000.0,
+  // Properties panel context
+  const [activeSection, setActiveSection] = useState('geometry');
+
+  // Pipeline Browser layer visibility
+  const [layerVisibility, setLayerVisibility] = useState({
+    domain: true,
+    geometry: true,
+    slice: true,
+    fluidBody: true,
+    vectors: false,
+  });
+  const [selectedLayer, setSelectedLayer] = useState('geometry');
+
+  const toggleLayer = useCallback((id) => {
+    setLayerVisibility((prev) => ({ ...prev, [id]: !prev[id] }));
+  }, []);
+
+  // Geometry Configuration
+  const [geometryType, setGeometryType] = useState('channel_cylinder');
+  const [cylinderRadius, setCylinderRadius] = useState(12.0);
+  const [cylinderPos, setCylinderPos] = useState({ x: 35.0, y: 50.0 });
+  const [stepParams, setStepParams] = useState({ length: 30.0, height: 40.0 });
+  const [boxParams, setBoxParams] = useState({
+    min_x: 35.0, max_x: 65.0, min_y: 35.0, max_y: 65.0, min_z: 10.0, max_z: 50.0,
   });
 
-  // Array of inlets
-  const [inlets, setInlets] = useState([]);
-  
-  // Tracks which inlet is currently waiting for a mouse click on the 3D model
-  const [placingInletId, setPlacingInletId] = useState(null);
-  const [nextInletId, setNextInletId] = useState(1);
-  
-  // Tracks when a user double clicks and needs to be prompted for velocity
-  const [velocityPrompt, setVelocityPrompt] = useState(null);
+  // Boundary Conditions
+  const [boundaries, setBoundaries] = useState({
+    x_min: { type: 'inlet', velocity: { x: 1.5, y: 0.0, z: 0.0 } },
+    x_max: { type: 'outlet', pressure: 0.0 },
+    y_min: { type: 'no_slip' },
+    y_max: { type: 'no_slip' },
+    z_min: { type: 'slip' },
+    z_max: { type: 'slip' },
+  });
 
-  // Live simulation logs
-  const [logs, setLogs] = useState([]);
+  // Fluid Properties
+  const [fluidProperties, setFluidProperties] = useState({
+    kinematicViscosity: 0.001,
+    density: 1.0,
+  });
+
+  // Simulation State
   const [isSimulating, setIsSimulating] = useState(false);
-  const logsEndRef = useRef(null);
-  
-  // CFD Heatmap slice data
-  const [sliceData, setSliceData] = useState(null);
+  const [simStatus, setSimStatus] = useState('idle');
   const [frameData, setFrameData] = useState(null);
+  const [obstacleVoxels, setObstacleVoxels] = useState([]);
+  const [currentStep, setCurrentStep] = useState(0);
+  const [maxDiv, setMaxDiv] = useState(0);
+  const [activeField, setActiveField] = useState('velocity_mag');
+  const [convergenceHistory, setConvergenceHistory] = useState([]);
 
-  const [stlBase64, setStlBase64] = useState(null);
+  // Preset Handler
+  const applyPreset = (preset) => {
+    setGeometryType(preset);
+    if (preset === 'box') {
+      setBoundaries({
+        x_min: { type: 'inlet', velocity: { x: 1.0, y: 0.0, z: 0.0 } },
+        x_max: { type: 'outlet', pressure: 0.0 },
+        y_min: { type: 'no_slip' },
+        y_max: { type: 'no_slip' },
+        z_min: { type: 'slip' },
+        z_max: { type: 'slip' },
+      });
+    } else if (preset === 'channel_cylinder') {
+      setCylinderRadius(12.0);
+      setCylinderPos({ x: 35.0, y: 50.0 });
+      setBoundaries({
+        x_min: { type: 'inlet', velocity: { x: 2.0, y: 0.0, z: 0.0 } },
+        x_max: { type: 'outlet', pressure: 0.0 },
+        y_min: { type: 'no_slip' },
+        y_max: { type: 'no_slip' },
+        z_min: { type: 'slip' },
+        z_max: { type: 'slip' },
+      });
+    } else if (preset === 'step') {
+      setStepParams({ length: 30.0, height: 40.0 });
+      setBoundaries({
+        x_min: { type: 'inlet', velocity: { x: 1.5, y: 0.0, z: 0.0 } },
+        x_max: { type: 'outlet', pressure: 0.0 },
+        y_min: { type: 'no_slip' },
+        y_max: { type: 'no_slip' },
+        z_min: { type: 'slip' },
+        z_max: { type: 'slip' },
+      });
+    } else if (preset === 'cavity') {
+      setBoundaries({
+        x_min: { type: 'no_slip' },
+        x_max: { type: 'no_slip' },
+        y_min: { type: 'no_slip' },
+        y_max: { type: 'moving_wall', velocity: { x: 1.0, y: 0.0, z: 0.0 } },
+        z_min: { type: 'slip' },
+        z_max: { type: 'slip' },
+      });
+    }
+  };
 
   const handleFileUpload = (event) => {
     const file = event.target.files[0];
     if (file) {
       const url = URL.createObjectURL(file);
       setStlFileUrl(url);
-      
-      // Read the raw file to send to the Rust backend
+      setGeometryType('stl');
       const reader = new FileReader();
       reader.onload = (e) => {
-        // e.target.result is a data URL like "data:model/stl;base64,AAAA..."
         const base64 = e.target.result.split(',')[1];
         setStlBase64(base64);
       };
@@ -71,470 +124,246 @@ function App() {
     }
   };
 
-  const handlePointSelect = (point) => {
-    if (placingInletId === null) return;
-    setInlets(prev => prev.map(inlet => {
-      if (inlet.id === placingInletId) {
+  const updateBoundary = (face, field, value) => {
+    setBoundaries((prev) => {
+      const current = prev[face] || { type: 'no_slip' };
+      if (field === 'type') {
+        let newBc = { type: value };
+        if (value === 'inlet') newBc.velocity = { x: 1.0, y: 0.0, z: 0.0 };
+        if (value === 'outlet') newBc.pressure = 0.0;
+        if (value === 'moving_wall') newBc.velocity = { x: 1.0, y: 0.0, z: 0.0 };
+        return { ...prev, [face]: newBc };
+      }
+      if (field.startsWith('velocity.')) {
+        const axis = field.split('.')[1];
         return {
-          ...inlet,
-          position: {
-            x: parseFloat(point.x.toFixed(2)),
-            y: parseFloat(point.y.toFixed(2)),
-            z: parseFloat(point.z.toFixed(2))
-          }
+          ...prev,
+          [face]: {
+            ...current,
+            velocity: { ...(current.velocity || { x: 0, y: 0, z: 0 }), [axis]: parseFloat(value) || 0 },
+          },
         };
       }
-      return inlet;
-    }));
-    // Instantly lock position so user doesn't have to move mouse back to click "Fix"
-    setPlacingInletId(null);
-  };
-
-  const handleDoubleClick = (point) => {
-    // Open the velocity prompt modal instead of instantly placing with a default velocity
-    setVelocityPrompt({
-      point: {
-        x: parseFloat(point.x.toFixed(2)),
-        y: parseFloat(point.y.toFixed(2)),
-        z: parseFloat(point.z.toFixed(2))
-      },
-      vx: 0,
-      vy: 0,
-      vz: 0
+      if (field === 'pressure') {
+        return {
+          ...prev,
+          [face]: { ...current, pressure: parseFloat(value) || 0 },
+        };
+      }
+      return prev;
     });
   };
 
-  const submitVelocityPrompt = () => {
-    const newInlet = {
-      id: nextInletId,
-      position: velocityPrompt.point,
-      velocity: { x: velocityPrompt.vx, y: velocityPrompt.vy, z: velocityPrompt.vz }
-    };
-    setInlets(prev => [...prev, newInlet]);
-    setNextInletId(prev => prev + 1);
-    setVelocityPrompt(null);
-  };
-
-  const updateInletVector = (id, type, field, value) => {
-    setInlets(prev => prev.map(inlet => {
-      if (inlet.id === id) {
-        return {
-          ...inlet,
-          [type]: {
-            ...inlet[type],
-            [field]: parseFloat(value) || 0
-          }
-        };
-      }
-      return inlet;
-    }));
-  };
-
-  const addInlet = () => {
-    const newInlet = {
-      id: nextInletId,
-      position: { x: 0, y: 0, z: 0 },
-      velocity: { x: 0, y: 0, z: 0 }
-    };
-    setInlets([...inlets, newInlet]);
-    setPlacingInletId(nextInletId); // Automatically enter placement mode for the new inlet
-    setNextInletId(nextInletId + 1);
-  };
-
-  const removeInlet = (id) => {
-    const newInlets = inlets.filter(i => i.id !== id);
-    setInlets(newInlets);
-    if (placingInletId === id) {
-      setPlacingInletId(null);
-    }
-  };
-
+  // ─── Simulation with AbortController ───
   const submitSimulation = async () => {
+    const controller = new AbortController();
+    abortRef.current = controller;
+
+    let geoPayload = { type: 'box' };
+    if (geometryType === 'channel_cylinder') {
+      geoPayload = { type: 'channel_cylinder', radius: cylinderRadius, center_x: cylinderPos.x, center_y: cylinderPos.y };
+    } else if (geometryType === 'step') {
+      geoPayload = { type: 'step', step_length: stepParams.length, step_height: stepParams.height };
+    } else if (geometryType === 'box_obstacle') {
+      geoPayload = { type: 'box_obstacle', ...boxParams };
+    } else if (geometryType === 'stl' && stlBase64) {
+      geoPayload = { type: 'stl', stl_base64: stlBase64 };
+    }
+
     const payload = {
       kinematicViscosity: fluidProperties.kinematicViscosity,
       density: fluidProperties.density,
-      inlets: inlets,
-      stl_base64: stlBase64
+      geometry: geoPayload,
+      boundaries: boundaries,
+      inlets: [],
+      stl_base64: stlBase64,
     };
 
-    setLogs([]);
-    setSliceData(null);
     setFrameData(null);
+    setObstacleVoxels([]);
+    setCurrentStep(0);
+    setConvergenceHistory([]);
+    setMaxDiv(0);
     setIsSimulating(true);
+    setSimStatus('running');
 
     try {
       const response = await fetch('http://127.0.0.1:3000/simulate', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(payload)
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+        signal: controller.signal,
       });
 
-      if (!response.body) {
-        throw new Error('ReadableStream not supported by the browser.');
-      }
+      if (!response.body) throw new Error('ReadableStream not supported.');
 
       const reader = response.body.getReader();
       const decoder = new TextDecoder('utf-8');
-      
       let buffer = '';
-      
+
       while (true) {
         const { value, done } = await reader.read();
         if (done) {
           setIsSimulating(false);
+          setSimStatus('complete');
           break;
         }
-        
         buffer += decoder.decode(value, { stream: true });
-        
-        // Parse SSE format (data: ...\n\n)
         let lines = buffer.split('\n\n');
-        buffer = lines.pop(); // Keep the last incomplete chunk in the buffer
+        buffer = lines.pop();
 
         for (let line of lines) {
           if (line.startsWith('data:')) {
             const data = line.substring(line.indexOf(':') + 1).trimStart();
-            
-            // Check if this is the JSON heatmap slice payload
-            if (data.startsWith('[FRAME]')) {
+            if (data.startsWith('[OBSTACLES]')) {
               try {
-                const frameJson = data.replace('[FRAME]', '');
-                const frame = JSON.parse(frameJson);
-                setFrameData(frame);
+                const voxels = JSON.parse(data.replace('[OBSTACLES]', ''));
+                setObstacleVoxels(voxels);
               } catch (e) {
-                console.error("Failed to parse frame data", e);
+                console.error('Failed to parse obstacles', e);
               }
-            } else if (data.startsWith('[SLICE]')) {
+            } else if (data.startsWith('[FRAME]')) {
               try {
-                const sliceJson = data.replace('[SLICE]', '');
-                const slice = JSON.parse(sliceJson);
-                setSliceData(slice);
+                const frame = JSON.parse(data.replace('[FRAME]', ''));
+                setFrameData(frame);
+                if (frame.max_div !== undefined) {
+                  setCurrentStep(frame.step || 0);
+                  setMaxDiv(frame.max_div || 0);
+                  setConvergenceHistory((prev) => [...prev, {
+                    step: frame.step,
+                    maxDiv: frame.max_div,
+                    velMax: frame.vel_max,
+                  }]);
+                }
               } catch (e) {
-                console.error("Failed to parse slice data", e);
+                console.error('Failed to parse frame', e);
               }
             } else {
-              // It's just a text log
-              setLogs(prev => [...prev, data]);
-              
-              // Auto-scroll to bottom of log view
-              if (logsEndRef.current) {
-                logsEndRef.current.scrollIntoView({ behavior: 'smooth' });
+              // Parse timestep info from log messages
+              const stepMatch = data.match(/Time Step (\d+):.*Divergence = ([\d.]+)/);
+              if (stepMatch) {
+                setCurrentStep(parseInt(stepMatch[1]));
+                setMaxDiv(parseFloat(stepMatch[2]));
               }
             }
           }
         }
       }
     } catch (error) {
-      setLogs(prev => [...prev, "Error: Make sure the Rust server is running on port 3000!"]);
+      if (error.name === 'AbortError') {
+        setSimStatus('idle');
+      } else {
+        setSimStatus('error');
+        console.error(error);
+      }
       setIsSimulating(false);
-      console.error(error);
     }
   };
 
-  // Helper to calculate maximum magnitude in the slice to normalize colors
-  const maxMag = frameData ? Math.max(...frameData.cells.map(c => c.mag), 0.001) : 1;
+  const stopSimulation = () => {
+    if (abortRef.current) {
+      abortRef.current.abort();
+      setIsSimulating(false);
+      setSimStatus('idle');
+    }
+  };
+
+  // Compute dynamic color scale bounds
+  const { minMag, maxMag } = useMemo(() => {
+    let currentMin = 0.0;
+    let currentMax = 1.0;
+
+    let inletNominal = 1.0;
+    if (boundaries.x_min?.type === 'inlet' && boundaries.x_min.velocity?.x) {
+      inletNominal = Math.abs(boundaries.x_min.velocity.x);
+    }
+
+    if (frameData?.slice && frameData.slice.length > 0) {
+      const valid = frameData.slice.filter((v) => v >= 0);
+      if (valid.length > 0) {
+        currentMin = Math.min(...valid);
+        currentMax = Math.max(...valid);
+      }
+    } else if (frameData?.cells && frameData.cells.length > 0) {
+      const mags = frameData.cells.map((c) => c.mag);
+      currentMin = Math.min(...mags);
+      currentMax = Math.max(...mags);
+    }
+
+    const maxBound = Math.max(currentMax, inletNominal * 1.4, 0.5);
+    const minBound = Math.min(currentMin, 0.0);
+    return { minMag: minBound, maxMag: maxBound };
+  }, [frameData, boundaries]);
 
   return (
-    <div className="app-container">
-      {/* SIDEBAR CONTROL PANEL */}
-      <aside className="controls-sidebar">
-        <div className="sidebar-header">
-          <h1>LiqVid</h1>
-          <p>Vol. 1 — CFD Simulation Engine</p>
+    <div className="pv-app">
+      <Toolbar
+        activeSection={activeSection}
+        setActiveSection={setActiveSection}
+        isSimulating={isSimulating}
+        onRun={submitSimulation}
+        onStop={stopSimulation}
+        layerVisibility={layerVisibility}
+        toggleLayer={toggleLayer}
+      />
+
+      <div className="pv-main">
+        <div className="pv-left-panel">
+          <PipelineBrowser
+            layerVisibility={layerVisibility}
+            toggleLayer={toggleLayer}
+            selectedLayer={selectedLayer}
+            setSelectedLayer={setSelectedLayer}
+          />
+          <PropertiesPanel
+            activeSection={activeSection}
+            geometryType={geometryType}
+            setGeometryType={setGeometryType}
+            cylinderRadius={cylinderRadius}
+            setCylinderRadius={setCylinderRadius}
+            cylinderPos={cylinderPos}
+            setCylinderPos={setCylinderPos}
+            stepParams={stepParams}
+            setStepParams={setStepParams}
+            boxParams={boxParams}
+            setBoxParams={setBoxParams}
+            applyPreset={applyPreset}
+            fileInputRef={fileInputRef}
+            handleFileUpload={handleFileUpload}
+            boundaries={boundaries}
+            updateBoundary={updateBoundary}
+            fluidProperties={fluidProperties}
+            setFluidProperties={setFluidProperties}
+          />
+          <FieldSelector activeField={activeField} setActiveField={setActiveField} />
+          <StatsPanel frameData={frameData} />
+          <ConvergencePlot history={convergenceHistory} />
         </div>
 
-        <div className="form-section">
-          <h2 className="section-title">I. Fluid Properties</h2>
-          
-          <div className="form-group">
-            <label>Kinematic Viscosity (ν)</label>
-            <input 
-              type="number" 
-              step="0.00001"
-              value={fluidProperties.kinematicViscosity}
-              onChange={(e) => setFluidProperties({...fluidProperties, kinematicViscosity: parseFloat(e.target.value)})}
-            />
-          </div>
-
-          <div className="form-group">
-            <label>Density (ρ)</label>
-            <input 
-              type="number" 
-              value={fluidProperties.density}
-              onChange={(e) => setFluidProperties({...fluidProperties, density: parseFloat(e.target.value)})}
-            />
-          </div>
-        </div>
-
-        <div className="form-section">
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border-color)', marginBottom: '8px' }}>
-            <h2 className="section-title" style={{ border: 'none', margin: 0, padding: 0 }}>II. Fluid Inlets</h2>
-            <button 
-              onClick={addInlet} 
-              style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '12px', fontWeight: 'bold' }}
-            >
-              <Plus size={14} /> ADD
-            </button>
-          </div>
-          
-          <p style={{fontSize: '10px', color: '#666', marginBottom: '12px'}}>
-            * <b>Pro Tip:</b> Double-click anywhere on the 3D model to instantly place a new inlet!
-          </p>
-
-          {inlets.map(inlet => {
-            const isPlacing = placingInletId === inlet.id;
-            return (
-              <div 
-                key={inlet.id} 
-                style={{ 
-                  border: isPlacing ? '2px solid #00ffcc' : '1px solid var(--border-color)', 
-                  padding: '12px', 
-                  marginBottom: '12px',
-                  background: isPlacing ? 'rgba(0, 255, 204, 0.1)' : 'transparent',
-                }}
-              >
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', alignItems: 'center' }}>
-                  <strong style={{ fontSize: '14px' }}>Inlet #{inlet.id} {isPlacing && "(Click model to place)"}</strong>
-                  <div style={{ display: 'flex', gap: '8px' }}>
-                    {!isPlacing && (
-                      <button 
-                        onClick={() => setPlacingInletId(inlet.id)}
-                        style={{ background: 'var(--text-color)', color: 'var(--bg-color)', border: 'none', padding: '4px 8px', fontSize: '10px', cursor: 'pointer', fontWeight: 'bold' }}
-                      >
-                        REPOSITION
-                      </button>
-                    )}
-                    <button 
-                      onClick={() => removeInlet(inlet.id)}
-                      style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#e53e3e', display: 'flex', alignItems: 'center' }}
-                    >
-                      <Trash2 size={16} />
-                    </button>
-                  </div>
-                </div>
-
-                <div className="form-group" style={{marginTop: '8px'}}>
-                  <label>Position (x, y, z)</label>
-                  <div className="vector-inputs">
-                    <input type="number" step="0.1" value={inlet.position.x} onChange={(e) => updateInletVector(inlet.id, 'position', 'x', e.target.value)} disabled={isPlacing} />
-                    <input type="number" step="0.1" value={inlet.position.y} onChange={(e) => updateInletVector(inlet.id, 'position', 'y', e.target.value)} disabled={isPlacing} />
-                    <input type="number" step="0.1" value={inlet.position.z} onChange={(e) => updateInletVector(inlet.id, 'position', 'z', e.target.value)} disabled={isPlacing} />
-                  </div>
-                </div>
-
-                <div className="form-group" style={{marginTop: '8px'}}>
-                  <label>Velocity (x, y, z)</label>
-                  <div className="vector-inputs">
-                    <input type="number" step="0.1" value={inlet.velocity.x} onChange={(e) => updateInletVector(inlet.id, 'velocity', 'x', e.target.value)} />
-                    <input type="number" step="0.1" value={inlet.velocity.y} onChange={(e) => updateInletVector(inlet.id, 'velocity', 'y', e.target.value)} />
-                    <input type="number" step="0.1" value={inlet.velocity.z} onChange={(e) => updateInletVector(inlet.id, 'velocity', 'z', e.target.value)} />
-                  </div>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-
-        <input 
-          type="file" 
-          accept=".stl" 
-          ref={fileInputRef} 
-          style={{ display: 'none' }} 
-          onChange={handleFileUpload} 
+        <Viewport
+          layerVisibility={layerVisibility}
+          boundaries={boundaries}
+          geometryType={geometryType}
+          cylinderRadius={cylinderRadius}
+          cylinderPos={cylinderPos}
+          stepParams={stepParams}
+          boxParams={boxParams}
+          obstacleVoxels={obstacleVoxels}
+          stlFileUrl={stlFileUrl}
+          frameData={frameData}
+          minMag={minMag}
+          maxMag={maxMag}
+          activeField={activeField}
         />
-        <div style={{ display: 'flex', gap: '8px', marginTop: 'auto' }}>
-          <button className="upload-btn" onClick={() => fileInputRef.current.click()} style={{ flex: 1 }}>
-            <Upload size={18} />
-            STL
-          </button>
-          
-          <button 
-            className="upload-btn" 
-            onClick={submitSimulation} 
-            disabled={isSimulating}
-            style={{ 
-              flex: 2, 
-              background: isSimulating ? '#ccc' : 'var(--text-color)', 
-              color: isSimulating ? '#666' : 'var(--bg-color)',
-              cursor: isSimulating ? 'not-allowed' : 'pointer'
-            }}
-          >
-            {isSimulating ? 'SIMULATING...' : 'RUN SIMULATION'}
-          </button>
-        </div>
-      </aside>
+      </div>
 
-      {/* 3D VIEWER AREA */}
-      <main className="viewer-container" style={{ position: 'relative' }}>
-        
-        {/* VELOCITY PROMPT OVERLAY */}
-        {velocityPrompt && (
-          <div style={{ 
-            position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', 
-            background: 'var(--bg-color)', border: '2px solid var(--border-color)', padding: '24px', 
-            zIndex: 100, display: 'flex', flexDirection: 'column', gap: '16px', 
-            boxShadow: '8px 8px 0px var(--border-color)' 
-          }}>
-            <h3 style={{fontFamily: 'Playfair Display', fontSize: '20px', margin: 0, borderBottom: '2px solid #111', paddingBottom: '8px'}}>
-              Set Initial Velocity
-            </h3>
-            <p style={{fontSize: '12px', color: '#666'}}>Enter the velocity vector (x, y, z) for this inlet.</p>
-            <div className="vector-inputs">
-              <input type="number" step="0.1" value={velocityPrompt.vx} onChange={e => setVelocityPrompt({...velocityPrompt, vx: parseFloat(e.target.value)||0})} />
-              <input type="number" step="0.1" value={velocityPrompt.vy} onChange={e => setVelocityPrompt({...velocityPrompt, vy: parseFloat(e.target.value)||0})} />
-              <input type="number" step="0.1" value={velocityPrompt.vz} onChange={e => setVelocityPrompt({...velocityPrompt, vz: parseFloat(e.target.value)||0})} />
-            </div>
-            <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
-              <button 
-                className="upload-btn" 
-                onClick={() => setVelocityPrompt(null)} 
-                style={{padding: '10px', flex: 1, background: '#eee', color: '#333', border: '1px solid #ccc'}}
-              >
-                CANCEL
-              </button>
-              <button 
-                className="upload-btn" 
-                onClick={submitVelocityPrompt} 
-                style={{padding: '10px', flex: 2}}
-              >
-                CONFIRM & PLACE
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* LIVE SIMULATION LOG TERMINAL */}
-        {(logs.length > 0 || isSimulating) && (
-          <div style={{
-            position: 'absolute',
-            bottom: '24px',
-            right: '24px',
-            width: '400px',
-            height: '250px',
-            background: 'rgba(17, 17, 17, 0.95)',
-            color: '#00ffcc',
-            fontFamily: 'monospace',
-            fontSize: '12px',
-            padding: '16px',
-            borderRadius: '8px',
-            zIndex: 50,
-            display: 'flex',
-            flexDirection: 'column',
-            boxShadow: '0 10px 30px rgba(0,0,0,0.5)',
-            border: '1px solid rgba(255,255,255,0.1)'
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', borderBottom: '1px solid rgba(255,255,255,0.1)', paddingBottom: '8px', marginBottom: '8px', color: '#fff' }}>
-              <Terminal size={14} />
-              <strong style={{ letterSpacing: '1px' }}>RUST SOLVER OUTPUT</strong>
-              {isSimulating && <span style={{ marginLeft: 'auto', color: '#00ffcc', animation: 'pulse 1.5s infinite' }}>● LIVE</span>}
-            </div>
-            <div style={{ overflowY: 'auto', flex: 1, display: 'flex', flexDirection: 'column', gap: '4px' }}>
-              {logs.map((log, index) => (
-                <div key={index}>{`> ${log}`}</div>
-              ))}
-              <div ref={logsEndRef} />
-            </div>
-          </div>
-        )}
-
-        {!stlFileUrl ? (
-          <div className="empty-state">
-            <Box />
-            <p>Awaiting Geometry Import...</p>
-          </div>
-        ) : (
-          <Canvas camera={{ position: [0, 0, 100], fov: 50 }}>
-            <ambientLight intensity={1.5} />
-            <directionalLight position={[10, 10, 10]} intensity={2} />
-            <Environment preset="city" />
-            
-            <axesHelper args={[50]} />
-            
-            <StlModel fileUrl={stlFileUrl} onPointSelect={handlePointSelect} onDoubleClick={handleDoubleClick} />
-            
-            {/* Render a bright neon sphere for the currently active velocity prompt */}
-            {velocityPrompt && (
-              <mesh position={[velocityPrompt.point.x, velocityPrompt.point.y, velocityPrompt.point.z]}>
-                <sphereGeometry args={[2.5, 32, 32]} />
-                <meshStandardMaterial color="#00ffcc" emissive="#00ffcc" emissiveIntensity={0.5} />
-              </mesh>
-            )}
-
-            {/* Render a sphere for each placed inlet */}
-            {inlets.map(inlet => (
-              <mesh key={inlet.id} position={[inlet.position.x, inlet.position.y, inlet.position.z]}>
-                <sphereGeometry args={[2, 16, 16]} />
-                <meshStandardMaterial 
-                  color={placingInletId === inlet.id ? "#00ffcc" : "#e53e3e"} 
-                  emissive={placingInletId === inlet.id ? "#00ffcc" : "#000000"} 
-                  emissiveIntensity={placingInletId === inlet.id ? 0.5 : 0}
-                />
-              </mesh>
-            ))}
-
-            {/* LIVE 3D FLOW VISUALIZATION — Smooth spheres with emissive glow */}
-            {frameData && frameData.cells && frameData.cells.filter(c => maxMag > 0 && c.mag / maxMag > 0.05).slice(0, 1000).map((cell, index) => {
-              const normalized = maxMag > 0 ? cell.mag / maxMag : 0;
-              const hue = (1 - normalized) * 240;
-              const color = `hsl(${hue}, 100%, 50%)`;
-              const emissiveColor = `hsl(${hue}, 100%, 40%)`;
-              const opacity = Math.min(0.9, normalized * 2.5);
-              if (opacity < 0.1) return null;
-              
-              const cellSize = frameData.cell_size || 5.0;
-              const radius = cellSize * 0.55;
-              
-              return (
-                <mesh key={`flow-${index}`} position={[cell.x, cell.y, cell.z]}>
-                  <sphereGeometry args={[radius, 12, 8]} />
-                  <meshStandardMaterial 
-                    color={color} 
-                    emissive={emissiveColor}
-                    emissiveIntensity={0.4 + normalized * 0.6}
-                    transparent 
-                    opacity={opacity} 
-                    depthWrite={false}
-                    roughness={0.2}
-                    metalness={0.1}
-                  />
-                </mesh>
-              );
-            })}
-
-            {/* STATIC SLICE FALLBACK (shown only when no live frame data) */}
-            {!frameData && sliceData && sliceData.map((cell, index) => {
-              const sliceMaxMag = Math.max(...sliceData.map(c => c.mag), 0.001);
-              const normalized = sliceMaxMag > 0 ? cell.mag / sliceMaxMag : 0;
-              const hue = (1 - normalized) * 240;
-              const color = `hsl(${hue}, 100%, 50%)`;
-              const emissiveColor = `hsl(${hue}, 100%, 40%)`;
-              const opacity = Math.min(0.85, normalized * 2.0);
-              if (opacity < 0.02) return null;
-              return (
-                <mesh key={`cell-${index}`} position={[cell.x, cell.y, 2]}>
-                  <circleGeometry args={[2.4, 16]} />
-                  <meshStandardMaterial 
-                    color={color} 
-                    emissive={emissiveColor}
-                    emissiveIntensity={0.3 + normalized * 0.5}
-                    transparent 
-                    opacity={opacity} 
-                    depthWrite={false}
-                    roughness={0.3}
-                    side={2}
-                  />
-                </mesh>
-              );
-            })}
-
-            <OrbitControls makeDefault />
-          </Canvas>
-        )}
-      </main>
+      <StatusBar
+        currentStep={currentStep}
+        totalSteps={frameData?.total_steps || 100}
+        maxDiv={maxDiv}
+        numCells={frameData?.fluid_cells || 50 * 50 * 30}
+        simStatus={simStatus}
+      />
     </div>
   );
 }
-
-export default App;

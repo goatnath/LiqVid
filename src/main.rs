@@ -124,32 +124,11 @@ async fn run_simulation(
         tokio::time::sleep(std::time::Duration::from_millis(200)).await;
 
         for step in 1..=100 {
-            // Re-inject inlet velocities EVERY timestep over a small region
-            for inlet in &payload.inlets {
-                let shifted_x = inlet.position.x + 50.0;
-                let shifted_y = inlet.position.y + 50.0;
-                let shifted_z = inlet.position.z + 50.0;
-
-                let ii = ((shifted_x / mesh.dx).floor() as usize).clamp(1, nx - 2);
-                let jj = ((shifted_y / mesh.dy).floor() as usize).clamp(1, ny - 2);
-                let kk = ((shifted_z / mesh.dz).floor() as usize).clamp(1, nz - 2);
-
-                let vel = Vector3::new(inlet.velocity.x, inlet.velocity.y, inlet.velocity.z);
-                // Inject over a 3×3×3 cluster so the source is strong enough to propagate
-                for di in 0..3_usize {
-                    for dj in 0..3_usize {
-                        for dk in 0..3_usize {
-                            let ci = (ii + di).min(nx - 1);
-                            let cj = (jj + dj).min(ny - 1);
-                            let ck = (kk + dk).min(nz - 1);
-                            let idx = mesh.cell_idx(ci, cj, ck);
-                            if !geom.is_solid[idx] {
-                                u.internal_field[idx] = vel;
-                            }
-                        }
-                    }
-                }
-            }
+            // Set Boundary Conditions
+            u.boundary_field.x_min = crate::fields::BcType::FixedValue(nalgebra::Vector3::new(2.0, 0.0, 0.0));
+            p.boundary_field.x_max = crate::fields::BcType::FixedValue(0.0);
+            p.boundary_field.x_min = crate::fields::BcType::ZeroGradient;
+            u.boundary_field.x_max = crate::fields::BcType::ZeroGradient;
 
             let nu = payload.kinematic_viscosity;
             let laplacian_u = fvc::laplacian_vector(&u, &mesh, &geom);
@@ -167,7 +146,7 @@ async fn run_simulation(
                 }
             }
 
-            let div_u = fvc::div(&u, &mesh);
+            let div_u = fvc::div(&u, &mesh, &geom);
 
             let mut source = VolScalarField::new(&mesh, 0.0);
             let mut max_div_u = 0.0_f64;
@@ -182,7 +161,7 @@ async fn run_simulation(
             }
             piso::solve_pressure_poisson(&mut p, &mesh, &source, 100);
 
-            let grad_p = fvc::grad(&p, &mesh);
+            let grad_p = fvc::grad(&p, &mesh, &geom);
 
             for i in 0..mesh.num_cells() {
                 u.internal_field[i] -= grad_p.internal_field[i] * dt;
@@ -206,32 +185,90 @@ async fn run_simulation(
             // --- STREAM LIVE 3D VOLUMETRIC DATA ---
             // Send a [FRAME] message every 2 timesteps for real-time animation in the UI
             if step % 2 == 0 {
-                let mut frame_cells = Vec::new();
-                for fi in 0..mesh.nx {
-                    for fj in 0..mesh.ny {
-                        for fk in 0..mesh.nz {
-                            let fidx = mesh.cell_idx(fi, fj, fk);
+                let mid_k = mesh.nz / 2;
+                let mut slice_grid = Vec::with_capacity(mesh.nx * mesh.ny);
+                let mut pressure_slice = Vec::with_capacity(mesh.nx * mesh.ny);
+                
+                for fj in 0..mesh.ny {
+                    for fi in 0..mesh.nx {
+                        let fidx = mesh.cell_idx(fi, fj, mid_k);
+                        if geom.is_solid[fidx] {
+                            slice_grid.push(-1.0);
+                            pressure_slice.push(-999.0);
+                        } else {
                             let vel = u.internal_field[fidx];
                             let mag = (vel.x * vel.x + vel.y * vel.y + vel.z * vel.z).sqrt();
-                            if mag > 0.001 {
-                                frame_cells.push(serde_json::json!({
-                                    "x": (fi as f64 + 0.5) * mesh.dx - 50.0,
-                                    "y": (fj as f64 + 0.5) * mesh.dy - 50.0,
-                                    "z": (fk as f64 + 0.5) * mesh.dz - 50.0,
-                                    "mag": mag,
-                                    "vx": vel.x,
-                                    "vy": vel.y,
-                                    "vz": vel.z
-                                }));
-                            }
+                            slice_grid.push(mag);
+                            pressure_slice.push(p.internal_field[fidx]);
                         }
                     }
                 }
-                if !frame_cells.is_empty() {
+
+                let step_stride = 2_usize;
+                let cell_w = mesh.dx * (step_stride as f64);
+                let cell_h = mesh.dy * (step_stride as f64);
+                let cell_d = mesh.dz * (step_stride as f64);
+
+                let mut frame_cells = Vec::new();
+                for fi in (0..mesh.nx).step_by(step_stride) {
+                    for fj in (0..mesh.ny).step_by(step_stride) {
+                        for fk in (0..mesh.nz).step_by(step_stride) {
+                            let fidx = mesh.cell_idx(fi, fj, fk);
+                            if geom.is_solid[fidx] { continue; }
+                            
+                            let vel = u.internal_field[fidx];
+                            let mag = (vel.x * vel.x + vel.y * vel.y + vel.z * vel.z).sqrt();
+                            frame_cells.push(serde_json::json!({
+                                "x": (fi as f64 + (step_stride as f64) / 2.0) * mesh.dx - (mesh.nx as f64 * mesh.dx) / 2.0,
+                                "y": (fj as f64 + (step_stride as f64) / 2.0) * mesh.dy - (mesh.ny as f64 * mesh.dy) / 2.0,
+                                "z": (fk as f64 + (step_stride as f64) / 2.0) * mesh.dz - (mesh.nz as f64 * mesh.dz) / 2.0,
+                                "mag": mag, "vx": vel.x, "vy": vel.y, "vz": vel.z, "p": p.internal_field[fidx]
+                            }));
+                        }
+                    }
+                }
+
+                if !frame_cells.is_empty() || !slice_grid.is_empty() {
+                    let mut vel_max = 0.0_f64;
+                    let mut p_min = f64::MAX;
+                    let mut p_max = f64::MIN;
+                    let mut vel_sum = 0.0_f64;
+                    let mut fluid_count = 0_usize;
+                    for i in 0..mesh.num_cells() {
+                        if !geom.is_solid[i] {
+                            let vel = u.internal_field[i];
+                            let mag = (vel.x * vel.x + vel.y * vel.y + vel.z * vel.z).sqrt();
+                            if mag > vel_max { vel_max = mag; }
+                            vel_sum += mag;
+                            let pv = p.internal_field[i];
+                            if pv < p_min { p_min = pv; }
+                            if pv > p_max { p_max = pv; }
+                            fluid_count += 1;
+                        }
+                    }
+                    let vel_avg = if fluid_count > 0 { vel_sum / fluid_count as f64 } else { 0.0 };
+                    if p_min == f64::MAX { p_min = 0.0; }
+                    if p_max == f64::MIN { p_max = 0.0; }
+
                     if let Ok(frame_json) = serde_json::to_string(&serde_json::json!({
                         "step": step,
+                        "total_steps": 100,
                         "cells": frame_cells,
-                        "cell_size": mesh.dx
+                        "slice": slice_grid,
+                        "pressure_slice": pressure_slice,
+                        "nx": mesh.nx,
+                        "ny": mesh.ny,
+                        "nz": mesh.nz,
+                        "cell_w": cell_w,
+                        "cell_h": cell_h,
+                        "cell_d": cell_d,
+                        "max_div": max_div_u,
+                        "vel_max": vel_max,
+                        "vel_avg": vel_avg,
+                        "p_min": p_min,
+                        "p_max": p_max,
+                        "fluid_cells": fluid_count,
+                        "nu": payload.kinematic_viscosity
                     })) {
                         let msg = format!("[FRAME]{}", frame_json);
                         let _ = tx.send(Ok(Event::default().data(msg))).await;

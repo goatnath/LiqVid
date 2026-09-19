@@ -4,7 +4,7 @@ use crate::mesh::Mesh;
 
 use nalgebra::Vector3;
 
-pub fn grad(scalar_field: &VolScalarField, mesh: &Mesh) -> VolVectorField {
+pub fn grad(scalar_field: &VolScalarField, mesh: &Mesh, geom: &Geometry) -> VolVectorField {
     let mut grad_field = VolVectorField::new(mesh, Vector3::new(0.0, 0.0, 0.0));
 
     for i in 0..(mesh.nx) {
@@ -15,7 +15,7 @@ pub fn grad(scalar_field: &VolScalarField, mesh: &Mesh) -> VolVectorField {
 
                 //X direction
                 let p_east = if i < mesh.nx - 1 {
-                    (scalar_field.internal_field[mesh.cell_idx(i + 1, j, k)] + p_center) / 2.0
+                    if geom.is_solid[mesh.cell_idx(i + 1, j, k)] { p_center } else { (scalar_field.internal_field[mesh.cell_idx(i + 1, j, k)] + p_center) / 2.0 }
                 } else {
                     match scalar_field.boundary_field.x_max {
                         BcType::FixedValue(v) => v,
@@ -24,7 +24,7 @@ pub fn grad(scalar_field: &VolScalarField, mesh: &Mesh) -> VolVectorField {
                 };
 
                 let p_west = if i > 0 {
-                    (scalar_field.internal_field[mesh.cell_idx(i - 1, j, k)] + p_center) / 2.0
+                    if geom.is_solid[mesh.cell_idx(i - 1, j, k)] { p_center } else { (scalar_field.internal_field[mesh.cell_idx(i - 1, j, k)] + p_center) / 2.0 }
                 } else {
                     match scalar_field.boundary_field.x_min {
                         BcType::FixedValue(v) => v,
@@ -36,7 +36,7 @@ pub fn grad(scalar_field: &VolScalarField, mesh: &Mesh) -> VolVectorField {
 
                 //Y direction
                 let p_north = if j < mesh.ny - 1 {
-                    (scalar_field.internal_field[mesh.cell_idx(i, j + 1, k)] + p_center) / 2.0
+                    if geom.is_solid[mesh.cell_idx(i, j + 1, k)] { p_center } else { (scalar_field.internal_field[mesh.cell_idx(i, j + 1, k)] + p_center) / 2.0 }
                 } else {
                     match scalar_field.boundary_field.y_max {
                         BcType::FixedValue(v) => v,
@@ -45,7 +45,7 @@ pub fn grad(scalar_field: &VolScalarField, mesh: &Mesh) -> VolVectorField {
                 };
 
                 let p_south = if j > 0 {
-                    (scalar_field.internal_field[mesh.cell_idx(i, j - 1, k)] + p_center) / 2.0
+                    if geom.is_solid[mesh.cell_idx(i, j - 1, k)] { p_center } else { (scalar_field.internal_field[mesh.cell_idx(i, j - 1, k)] + p_center) / 2.0 }
                 } else {
                     match scalar_field.boundary_field.y_min {
                         BcType::FixedValue(v) => v,
@@ -57,7 +57,7 @@ pub fn grad(scalar_field: &VolScalarField, mesh: &Mesh) -> VolVectorField {
 
                 //Z direction
                 let p_front = if k < mesh.nz - 1 {
-                    (scalar_field.internal_field[mesh.cell_idx(i, j, k + 1)] + p_center) / 2.0
+                    if geom.is_solid[mesh.cell_idx(i, j, k + 1)] { p_center } else { (scalar_field.internal_field[mesh.cell_idx(i, j, k + 1)] + p_center) / 2.0 }
                 } else {
                     match scalar_field.boundary_field.z_max {
                         BcType::FixedValue(v) => v,
@@ -66,7 +66,7 @@ pub fn grad(scalar_field: &VolScalarField, mesh: &Mesh) -> VolVectorField {
                 };
 
                 let p_back = if k > 0 {
-                    (scalar_field.internal_field[mesh.cell_idx(i, j, k - 1)] + p_center) / 2.0
+                    if geom.is_solid[mesh.cell_idx(i, j, k - 1)] { p_center } else { (scalar_field.internal_field[mesh.cell_idx(i, j, k - 1)] + p_center) / 2.0 }
                 } else {
                     match scalar_field.boundary_field.z_min {
                         BcType::FixedValue(v) => v,
@@ -84,7 +84,7 @@ pub fn grad(scalar_field: &VolScalarField, mesh: &Mesh) -> VolVectorField {
     grad_field
 }
 
-pub fn div(vector_field: &VolVectorField, mesh: &Mesh) -> VolScalarField {
+pub fn div(vector_field: &VolVectorField, mesh: &Mesh, geom: &Geometry) -> VolScalarField {
     let mut div_field = VolScalarField::new(mesh, 0.0);
     for i in 0..mesh.nx {
         for j in 0..mesh.ny {
@@ -93,7 +93,7 @@ pub fn div(vector_field: &VolVectorField, mesh: &Mesh) -> VolScalarField {
                 let u_center = vector_field.internal_field[c_idx];
 
                 let u_east = if i < mesh.nx - 1 {
-                    (vector_field.internal_field[mesh.cell_idx(i + 1, j, k)].x + u_center.x) / 2.0
+                    if geom.is_solid[mesh.cell_idx(i + 1, j, k)] { 0.0 } else { (vector_field.internal_field[mesh.cell_idx(i + 1, j, k)].x + u_center.x) / 2.0 }
                 } else {
                     match vector_field.boundary_field.x_max {
                         BcType::FixedValue(v) => v.x,
@@ -102,7 +102,7 @@ pub fn div(vector_field: &VolVectorField, mesh: &Mesh) -> VolScalarField {
                 };
 
                 let u_west = if i > 0 {
-                    (vector_field.internal_field[mesh.cell_idx(i - 1, j, k)].x + u_center.x) / 2.0
+                    if geom.is_solid[mesh.cell_idx(i - 1, j, k)] { 0.0 } else { (vector_field.internal_field[mesh.cell_idx(i - 1, j, k)].x + u_center.x) / 2.0 }
                 } else {
                     match vector_field.boundary_field.x_min {
                         BcType::FixedValue(v) => v.x,
@@ -112,7 +112,7 @@ pub fn div(vector_field: &VolVectorField, mesh: &Mesh) -> VolScalarField {
                 let du_dx = (u_east - u_west) / mesh.dx;
 
                 let v_north = if j < mesh.ny - 1 {
-                    (vector_field.internal_field[mesh.cell_idx(i, j + 1, k)].y + u_center.y) / 2.0
+                    if geom.is_solid[mesh.cell_idx(i, j + 1, k)] { 0.0 } else { (vector_field.internal_field[mesh.cell_idx(i, j + 1, k)].y + u_center.y) / 2.0 }
                 } else {
                     match vector_field.boundary_field.y_max {
                         BcType::FixedValue(v) => v.y,
@@ -120,7 +120,7 @@ pub fn div(vector_field: &VolVectorField, mesh: &Mesh) -> VolScalarField {
                     }
                 };
                 let v_south = if j > 0 {
-                    (vector_field.internal_field[mesh.cell_idx(i, j - 1, k)].y + u_center.y) / 2.0
+                    if geom.is_solid[mesh.cell_idx(i, j - 1, k)] { 0.0 } else { (vector_field.internal_field[mesh.cell_idx(i, j - 1, k)].y + u_center.y) / 2.0 }
                 } else {
                     match vector_field.boundary_field.y_min {
                         BcType::FixedValue(v) => v.y,
@@ -129,7 +129,7 @@ pub fn div(vector_field: &VolVectorField, mesh: &Mesh) -> VolScalarField {
                 };
                 let du_dy = (v_north - v_south) / mesh.dy;
                 let w_front = if k < mesh.nz - 1 {
-                    (vector_field.internal_field[mesh.cell_idx(i, j, k + 1)].z + u_center.z) / 2.0
+                    if geom.is_solid[mesh.cell_idx(i, j, k + 1)] { 0.0 } else { (vector_field.internal_field[mesh.cell_idx(i, j, k + 1)].z + u_center.z) / 2.0 }
                 } else {
                     match vector_field.boundary_field.z_max {
                         BcType::FixedValue(v) => v.z,
@@ -137,7 +137,7 @@ pub fn div(vector_field: &VolVectorField, mesh: &Mesh) -> VolScalarField {
                     }
                 };
                 let w_back = if k > 0 {
-                    (vector_field.internal_field[mesh.cell_idx(i, j, k - 1)].z + u_center.z) / 2.0
+                    if geom.is_solid[mesh.cell_idx(i, j, k - 1)] { 0.0 } else { (vector_field.internal_field[mesh.cell_idx(i, j, k - 1)].z + u_center.z) / 2.0 }
                 } else {
                     match vector_field.boundary_field.z_min {
                         BcType::FixedValue(v) => v.z,
@@ -250,9 +250,9 @@ pub fn convect(vector_field: &VolVectorField, mesh: &Mesh, geom: &Geometry) -> V
 
                 // Calculate spatial derivatives (Central Differencing)
                 // Note: du_dx is a Vector3 containing (du/dx, dv/dx, dw/dx)
-                let du_dx = (u_e - u_w) / (2.0 * mesh.dx);
-                let du_dy = (u_n - u_s) / (2.0 * mesh.dy);
-                let du_dz = (u_f - u_b) / (2.0 * mesh.dz);
+                let du_dx = if u_c.x >= 0.0 { (u_c - u_w) / mesh.dx } else { (u_e - u_c) / mesh.dx };
+                let du_dy = if u_c.y >= 0.0 { (u_c - u_s) / mesh.dy } else { (u_n - u_c) / mesh.dy };
+                let du_dz = if u_c.z >= 0.0 { (u_c - u_b) / mesh.dz } else { (u_f - u_c) / mesh.dz };
 
                 // (U • ∇) U = u*(dU/dx) + v*(dU/dy) + w*(dU/dz)
                 let convection = du_dx * u_c.x + du_dy * u_c.y + du_dz * u_c.z;
