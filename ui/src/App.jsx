@@ -219,9 +219,7 @@ export default function App() {
               try {
                 const voxels = JSON.parse(data.replace('[OBSTACLES]', ''));
                 setObstacleVoxels(voxels);
-              } catch (e) {
-                console.error('Failed to parse obstacles', e);
-              }
+              } catch (_) { /* malformed SSE chunk — ignore */ }
             } else if (data.startsWith('[FRAME]')) {
               try {
                 const frame = JSON.parse(data.replace('[FRAME]', ''));
@@ -235,9 +233,7 @@ export default function App() {
                     velMax: frame.vel_max,
                   }]);
                 }
-              } catch (e) {
-                console.error('Failed to parse frame', e);
-              }
+              } catch (_) { /* malformed SSE chunk — ignore */ }
             } else {
               // Parse timestep info from log messages
               const stepMatch = data.match(/Time Step (\d+):.*Divergence = ([\d.]+)/);
@@ -254,7 +250,6 @@ export default function App() {
         setSimStatus('idle');
       } else {
         setSimStatus('error');
-        console.error(error);
       }
       setIsSimulating(false);
     }

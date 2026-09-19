@@ -15,3 +15,11 @@ Cargo.lock
 # Scratch / test files
 test_out.txt
 test_sse.py
+*.patch
+server*.log
+
+# Python scratch scripts
+patch_*.py
+fix_*.py
+test_client*.py
+run_*.rs
