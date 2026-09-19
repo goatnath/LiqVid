@@ -1,10 +1,12 @@
 import { useState, useRef, useMemo, useCallback } from 'react';
-import { getCfdColor } from './colormap';
 import Toolbar from './Toolbar';
 import PipelineBrowser from './PipelineBrowser';
 import PropertiesPanel from './PropertiesPanel';
 import Viewport from './Viewport';
 import StatusBar from './StatusBar';
+import FieldSelector from './FieldSelector';
+import StatsPanel from './StatsPanel';
+import ConvergencePlot from './ConvergencePlot';
 
 export default function App() {
   const fileInputRef = useRef(null);

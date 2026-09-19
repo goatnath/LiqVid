@@ -1,4 +1,4 @@
-import { Play, Square, Layers, Grid3x3, Wind, Eye } from 'lucide-react';
+import { Play, Square, Layers, Grid3x3, Wind } from 'lucide-react';
 
 export default function Toolbar({
   activeSection,
