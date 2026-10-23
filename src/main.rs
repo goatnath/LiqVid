@@ -18,6 +18,7 @@ mod fvc;
 mod geometry;
 mod mesh;
 mod piso;
+mod benchmark;
 
 #[derive(Deserialize, Debug)]
 pub struct Vector3Def {
@@ -40,6 +41,10 @@ pub struct SimulationRequest {
     pub density: f64,
     pub inlets: Vec<InletRequest>,
     pub stl_base64: Option<String>,
+    #[serde(default)]
+    pub geometry: Option<serde_json::Value>,
+    #[serde(default)]
+    pub boundaries: Option<serde_json::Value>,
 }
 
 #[derive(Serialize)]
@@ -116,6 +121,10 @@ async fn run_simulation(
             }
         }
 
+        if payload.geometry.as_ref().and_then(|g| g.get("type")).and_then(|v| v.as_str()) != Some("stl") {
+            apply_geometry_config(&mut geom, &mesh, payload.geometry.as_ref());
+        }
+
         let _ = tx
             .send(Ok(
                 Event::default().data("Starting PISO Mass Conservation Loop....")
@@ -124,18 +133,17 @@ async fn run_simulation(
         tokio::time::sleep(std::time::Duration::from_millis(200)).await;
 
         for step in 1..=100 {
-            // Set Boundary Conditions
-            u.boundary_field.x_min = crate::fields::BcType::FixedValue(nalgebra::Vector3::new(2.0, 0.0, 0.0));
-            p.boundary_field.x_max = crate::fields::BcType::FixedValue(0.0);
-            p.boundary_field.x_min = crate::fields::BcType::ZeroGradient;
-            u.boundary_field.x_max = crate::fields::BcType::ZeroGradient;
+            // Apply the boundary values selected in the UI on every timestep.
+            apply_boundary_conditions(&mut u, &mut p, &mesh, payload.boundaries.as_ref());
 
             let nu = payload.kinematic_viscosity;
             let laplacian_u = fvc::laplacian_vector(&u, &mesh, &geom);
             let convection_u = fvc::convect(&u, &mesh, &geom);
 
             for i in 0..mesh.num_cells() {
-                u.internal_field[i] += (laplacian_u.internal_field[i] * nu - convection_u.internal_field[i]) * dt;
+                if !geom.is_solid[i] {
+                    u.internal_field[i] += (laplacian_u.internal_field[i] * nu - convection_u.internal_field[i]) * dt;
+                }
             }
 
             // --- NO SLIP BOUNDARY CONDITION ---
@@ -152,6 +160,7 @@ async fn run_simulation(
             let mut max_div_u = 0.0_f64;
 
             for i in 0..mesh.num_cells() {
+                if geom.is_solid[i] { continue; }
                 let div_val = div_u.internal_field[i];
                 source.internal_field[i] = div_val / dt;
 
@@ -159,12 +168,14 @@ async fn run_simulation(
                     max_div_u = div_val.abs();
                 }
             }
-            piso::solve_pressure_poisson(&mut p, &mesh, &source, 100);
+            piso::solve_pressure_poisson(&mut p, &mesh, &source, &geom, 100);
 
             let grad_p = fvc::grad(&p, &mesh, &geom);
 
             for i in 0..mesh.num_cells() {
-                u.internal_field[i] -= grad_p.internal_field[i] * dt;
+                if !geom.is_solid[i] {
+                    u.internal_field[i] -= grad_p.internal_field[i] * dt;
+                }
             }
             
             // --- NO SLIP BOUNDARY CONDITION (AGAIN) ---
@@ -318,4 +329,136 @@ async fn run_simulation(
     });
 
     Sse::new(ReceiverStream::new(rx))
+}
+
+
+fn number(config: &serde_json::Value, key: &str, fallback: f64) -> f64 {
+    config.get(key).and_then(|v| v.as_f64()).unwrap_or(fallback)
+}
+
+fn apply_geometry_config(
+    geom: &mut geometry::Geometry,
+    mesh: &Mesh,
+    config: Option<&serde_json::Value>,
+) {
+    let Some(config) = config else { return; };
+    let kind = config.get("type").and_then(|v| v.as_str()).unwrap_or("box");
+    for i in 0..mesh.nx {
+        for j in 0..mesh.ny {
+            for k in 0..mesh.nz {
+                let x = (i as f64 + 0.5) * mesh.dx;
+                let y = (j as f64 + 0.5) * mesh.dy;
+                let z = (k as f64 + 0.5) * mesh.dz;
+                let solid = match kind {
+                    "channel_cylinder" => {
+                        let cx = number(config, "center_x", 35.0);
+                        let cy = number(config, "center_y", 50.0);
+                        let radius = number(config, "radius", 12.0);
+                        (x - cx).powi(2) + (y - cy).powi(2) <= radius.powi(2)
+                    }
+                    "step" => x < number(config, "step_length", 30.0)
+                        && y < number(config, "step_height", 40.0),
+                    "box_obstacle" => {
+                        x >= number(config, "min_x", 35.0)
+                            && x <= number(config, "max_x", 65.0)
+                            && y >= number(config, "min_y", 35.0)
+                            && y <= number(config, "max_y", 65.0)
+                            && z >= number(config, "min_z", 10.0)
+                            && z <= number(config, "max_z", 50.0)
+                    }
+                    _ => false,
+                };
+                let idx = mesh.cell_idx(i, j, k);
+                geom.is_solid[idx] = solid;
+                geom.is_surface[idx] = false;
+            }
+        }
+    }
+    for i in 0..mesh.nx {
+        for j in 0..mesh.ny {
+            for k in 0..mesh.nz {
+                let idx = mesh.cell_idx(i, j, k);
+                if geom.is_solid[idx] { continue; }
+                let neighbors = [
+                    if i > 0 { Some(mesh.cell_idx(i-1,j,k)) } else { None },
+                    if i+1 < mesh.nx { Some(mesh.cell_idx(i+1,j,k)) } else { None },
+                    if j > 0 { Some(mesh.cell_idx(i,j-1,k)) } else { None },
+                    if j+1 < mesh.ny { Some(mesh.cell_idx(i,j+1,k)) } else { None },
+                    if k > 0 { Some(mesh.cell_idx(i,j,k-1)) } else { None },
+                    if k+1 < mesh.nz { Some(mesh.cell_idx(i,j,k+1)) } else { None },
+                ];
+                geom.is_surface[idx] = neighbors.iter().flatten().any(|n| geom.is_solid[*n]);
+            }
+        }
+    }
+}
+
+fn apply_boundary_conditions(
+    u: &mut VolVectorField,
+    p: &mut VolScalarField,
+    mesh: &Mesh,
+    config: Option<&serde_json::Value>,
+) {
+    use crate::fields::BcType;
+    let zero = nalgebra::Vector3::new(0.0, 0.0, 0.0);
+    let default = serde_json::Value::Null;
+    let config = config.unwrap_or(&default);
+    let mut velocity = [zero; 6];
+    let mut fixed_velocity = [false; 6];
+    let mut fixed_pressure = [None; 6];
+    let faces = ["x_min", "x_max", "y_min", "y_max", "z_min", "z_max"];
+    for (face_index, face) in faces.iter().enumerate() {
+        let bc = config.get(*face).unwrap_or(&default);
+        let kind = bc.get("type").and_then(|v| v.as_str()).unwrap_or("no_slip");
+        match kind {
+            "inlet" | "moving_wall" => {
+                let v = bc.get("velocity").unwrap_or(&default);
+                velocity[face_index] = nalgebra::Vector3::new(
+                    number(v, "x", 1.0), number(v, "y", 0.0), number(v, "z", 0.0)
+                );
+                fixed_velocity[face_index] = true;
+            }
+            "no_slip" => {
+                velocity[face_index] = zero;
+                fixed_velocity[face_index] = true;
+            }
+            _ => {}
+        }
+        if kind == "outlet" {
+            fixed_pressure[face_index] = Some(number(bc, "pressure", 0.0));
+        }
+    }
+
+    u.boundary_field.x_min = if fixed_velocity[0] { BcType::FixedValue(velocity[0]) } else { BcType::ZeroGradient };
+    u.boundary_field.x_max = if fixed_velocity[1] { BcType::FixedValue(velocity[1]) } else { BcType::ZeroGradient };
+    u.boundary_field.y_min = if fixed_velocity[2] { BcType::FixedValue(velocity[2]) } else { BcType::ZeroGradient };
+    u.boundary_field.y_max = if fixed_velocity[3] { BcType::FixedValue(velocity[3]) } else { BcType::ZeroGradient };
+    u.boundary_field.z_min = if fixed_velocity[4] { BcType::FixedValue(velocity[4]) } else { BcType::ZeroGradient };
+    u.boundary_field.z_max = if fixed_velocity[5] { BcType::FixedValue(velocity[5]) } else { BcType::ZeroGradient };
+
+    p.boundary_field.x_min = fixed_pressure[0].map(BcType::FixedValue).unwrap_or(BcType::ZeroGradient);
+    p.boundary_field.x_max = fixed_pressure[1].map(BcType::FixedValue).unwrap_or(BcType::ZeroGradient);
+    p.boundary_field.y_min = fixed_pressure[2].map(BcType::FixedValue).unwrap_or(BcType::ZeroGradient);
+    p.boundary_field.y_max = fixed_pressure[3].map(BcType::FixedValue).unwrap_or(BcType::ZeroGradient);
+    p.boundary_field.z_min = fixed_pressure[4].map(BcType::FixedValue).unwrap_or(BcType::ZeroGradient);
+    p.boundary_field.z_max = fixed_pressure[5].map(BcType::FixedValue).unwrap_or(BcType::ZeroGradient);
+
+    // Cell-centred boundary representation: enforce prescribed velocities on edge cells.
+    for i in 0..mesh.nx {
+        for j in 0..mesh.ny {
+            for k in 0..mesh.nz {
+                let faces_here = [
+                    (i == 0, 0usize), (i + 1 == mesh.nx, 1),
+                    (j == 0, 2), (j + 1 == mesh.ny, 3),
+                    (k == 0, 4), (k + 1 == mesh.nz, 5),
+                ];
+                for (on_face, f) in faces_here {
+                    if on_face && fixed_velocity[f] {
+                        let idx = mesh.cell_idx(i, j, k);
+                        u.internal_field[idx] = velocity[f];
+                    }
+                }
+            }
+        }
+    }
 }
