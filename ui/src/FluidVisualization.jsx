@@ -31,7 +31,7 @@ export function ContinuousFluidSlice({ sliceData, pressureSlice, vxSlice, vySlic
     // Compute local min/max for the selected field
     let fieldMin = Infinity;
     let fieldMax = -Infinity;
-    const solidMarker = isPressure ? -999.0 : -1.0;
+    const solidMarker = (isPressure || ['vx', 'vy', 'vz'].includes(activeField)) ? -999.0 : -1.0;
     for (let i = 0; i < data.length; i++) {
       if (data[i] > solidMarker + 0.5) {
         if (data[i] < fieldMin) fieldMin = data[i];
