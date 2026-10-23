@@ -40,7 +40,11 @@ pub fn advance(
         .fold(0.0_f64, |m, v| m.max(v.abs()))
 }
 
-// Solid faces carry zero normal pressure gradient and contribute no coupling.
+// Apply exactly the operator used by the velocity projection: D(G(p)).
+// The velocity correction has homogeneous boundary data: prescribed velocity
+// faces cannot change their flux, while pressure outlets extrapolate velocity.
+// With the paired velocity/pressure boundary conditions this is symmetric
+// negative semidefinite, including solid faces and the all-Neumann nullspace.
 fn apply_laplacian(
     p: &VolScalarField,
     mesh: &Mesh,
@@ -48,32 +52,35 @@ fn apply_laplacian(
     input: &[f64],
     is_delta: bool,
 ) -> Vec<f64> {
-    let mut output = vec![0.0; input.len()];
-    let boundaries = p.boundary_field.faces();
-    let h = [mesh.dx, mesh.dy, mesh.dz];
-    for k in 0..mesh.nz {
-        for j in 0..mesh.ny {
-            for i in 0..mesh.nx {
-                let idx = mesh.cell_idx(i, j, k);
-                if geom.is_solid[idx] {
-                    continue;
-                }
-                let c = input[idx];
-                for (face, neighbor) in mesh.neighbors(i, j, k).into_iter().enumerate() {
-                    let delta = match neighbor {
-                        Some(n) if !geom.is_solid[n] => input[n] - c,
-                        Some(_) => 0.0,
-                        None => match boundaries[face] {
-                            BcType::FixedValue(v) => 2.0 * (if is_delta { 0.0 } else { *v } - c),
-                            _ => 0.0,
-                        },
-                    };
-                    output[idx] += delta / h[face / 2].powi(2);
-                }
-            }
-        }
-    }
-    output
+    let scalar_bc = |bc: &BcType<f64>| match bc {
+        BcType::FixedValue(v) => BcType::FixedValue(if is_delta { 0.0 } else { *v }),
+        _ => BcType::ZeroGradient,
+    };
+    let pressure = VolScalarField {
+        internal_field: input.to_vec(),
+        boundary_field: crate::fields::BoundaryField {
+            x_min: scalar_bc(&p.boundary_field.x_min),
+            x_max: scalar_bc(&p.boundary_field.x_max),
+            y_min: scalar_bc(&p.boundary_field.y_min),
+            y_max: scalar_bc(&p.boundary_field.y_max),
+            z_min: scalar_bc(&p.boundary_field.z_min),
+            z_max: scalar_bc(&p.boundary_field.z_max),
+        },
+    };
+    let mut correction = crate::fvc::grad(&pressure, mesh, geom);
+    let velocity_bc = |bc: &BcType<f64>| match bc {
+        BcType::FixedValue(_) => BcType::ZeroGradient,
+        _ => BcType::FixedValue(nalgebra::Vector3::zeros()),
+    };
+    correction.boundary_field = crate::fields::BoundaryField {
+        x_min: velocity_bc(&p.boundary_field.x_min),
+        x_max: velocity_bc(&p.boundary_field.x_max),
+        y_min: velocity_bc(&p.boundary_field.y_min),
+        y_max: velocity_bc(&p.boundary_field.y_max),
+        z_min: velocity_bc(&p.boundary_field.z_min),
+        z_max: velocity_bc(&p.boundary_field.z_max),
+    };
+    crate::fvc::div(&correction, mesh, geom).internal_field
 }
 
 pub fn solve_pressure_poisson(
@@ -135,7 +142,7 @@ mod tests {
     use nalgebra::Vector3;
 
     #[test]
-    fn poisson_converges_to_linear_pressure_without_coupling_solids() {
+    fn poisson_recovers_linear_gradient_without_coupling_solids() {
         let mesh = Mesh::new(8, 4, 3, 8.0, 4.0, 3.0);
         let mut geom = Geometry::new(&mesh);
         for k in 0..mesh.nz {
@@ -153,18 +160,60 @@ mod tests {
         }
         let source = VolScalarField::new(&mesh, 0.0);
         solve_pressure_poisson(&mut p, &mesh, &source, &geom, 1000);
-        for k in 0..mesh.nz {
-            for j in 1..mesh.ny {
-                for i in 0..mesh.nx {
-                    assert!(
-                        (p.internal_field[mesh.cell_idx(i, j, k)] - (i as f64 + 0.5)).abs() < 1e-6
-                    );
-                }
+        // Collocated pressure can have a checkerboard null mode with two
+        // pressure outlets. Check its physical gradient rather than its gauge.
+        let gradient = crate::fvc::grad(&p, &mesh, &geom);
+        for (idx, value) in gradient.internal_field.iter().enumerate() {
+            if !geom.is_solid[idx] {
+                assert!((*value - Vector3::x()).norm() < 1e-6);
             }
         }
         let residual = apply_laplacian(&p, &mesh, &geom, &p.internal_field, false);
         assert!(residual.iter().map(|v| v * v).sum::<f64>().sqrt() < 1e-6);
         assert_eq!(p.internal_field[mesh.cell_idx(0, 0, 0)], 1234.0);
+    }
+
+    #[test]
+    fn projection_conserves_flux_on_anisotropic_grids_with_solids_and_outlets() {
+        for outlet in [false, true] {
+            let mesh = Mesh::new(12, 9, 4, 2.0, 1.0, 0.75);
+            let mut geom = Geometry::new(&mesh);
+            for k in 0..mesh.nz {
+                geom.is_solid[mesh.cell_idx(5, 4, k)] = true;
+            }
+            let mut u = VolVectorField::new(&mesh, Vector3::zeros());
+            u.boundary_field.x_min = BcType::FixedValue(Vector3::zeros());
+            u.boundary_field.x_max = BcType::FixedValue(Vector3::zeros());
+            u.boundary_field.y_min = BcType::FixedValue(Vector3::zeros());
+            u.boundary_field.y_max = BcType::FixedValue(Vector3::x());
+            u.boundary_field.z_min = BcType::Slip;
+            u.boundary_field.z_max = BcType::Slip;
+            let mut p = VolScalarField::new(&mesh, 0.0);
+            if outlet {
+                u.boundary_field.x_min = BcType::FixedValue(Vector3::x());
+                u.boundary_field.x_max = BcType::ZeroGradient;
+                p.boundary_field.x_max = BcType::FixedValue(2.0);
+            }
+            // Nontrivial 3D initial field exercises more than the lid forcing.
+            for (idx, velocity) in u.internal_field.iter_mut().enumerate() {
+                if !geom.is_solid[idx] {
+                    let phase = idx as f64;
+                    *velocity = Vector3::new(phase.sin(), (phase * 0.7).cos(), (phase * 0.3).sin());
+                }
+            }
+            for _ in 0..3 {
+                let divergence = advance(&mut u, &mut p, &mesh, &geom, 0.01, 1.7, 0.001);
+                assert!(
+                    divergence < 1e-8,
+                    "outlet={outlet}, divergence={divergence}"
+                );
+                for (idx, velocity) in u.internal_field.iter().enumerate() {
+                    if geom.is_solid[idx] {
+                        assert_eq!(*velocity, Vector3::zeros());
+                    }
+                }
+            }
+        }
     }
 
     #[test]
@@ -181,7 +230,8 @@ mod tests {
             u.boundary_field.z_max = BcType::Slip;
             let mut p = VolScalarField::new(&mesh, 0.0);
             for _ in 0..5 {
-                assert!(advance(&mut u, &mut p, &mesh, &geom, 0.01, density, 0.001).is_finite());
+                let divergence = advance(&mut u, &mut p, &mesh, &geom, 0.01, density, 0.001);
+                assert!(divergence < 1e-8, "cavity divergence: {divergence}");
             }
             (u, p)
         };

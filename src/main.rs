@@ -11,16 +11,11 @@ use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
 use tower_http::cors::CorsLayer;
 
-use crate::fields::{VolScalarField, VolVectorField};
-mod fields;
-mod fvc;
-mod geometry;
-mod mesh;
-mod piso;
+use liqvid::fields::{VolScalarField, VolVectorField};
+use liqvid::{fields, geometry, mesh, piso};
 mod visualization;
 
-mod config;
-use config::SimulationRequest;
+use liqvid::config::SimulationRequest;
 
 #[tokio::main]
 async fn main() {

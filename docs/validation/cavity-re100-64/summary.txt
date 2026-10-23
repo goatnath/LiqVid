@@ -1,0 +1,5 @@
+Re=100, grid 64 × 64 × 1: PASS
+Steady-change criterion: True after 20253 steps (t=20.253)
+Maximum centerline error: 0.01299489 (limit 0.05)
+RMS centerline error: 0.00518392
+Maximum discrete divergence: 4.71527262e-11 (limit 0.01)

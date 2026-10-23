@@ -4,7 +4,7 @@
 
 A lightweight 3D computational fluid dynamics project written from scratch in Rust, paired with a ParaView-inspired React/Three.js frontend. It solves the incompressible Navier–Stokes equations on a structured Cartesian grid using a simplified pressure-projection (PISO-style) method, inspired by OpenFOAM's `icoFoam`.
 
-This is a learning project. Operator and integration tests cover selected numerical behaviors, but a quantitative comparison against a reference CFD benchmark is still outstanding.
+This is a learning project. An automated Re=100 cavity benchmark checks reference agreement, steady-change behavior, and discrete divergence; the documented runs pass all three criteria. See the measured results below.
 
 
 
@@ -74,6 +74,7 @@ Cylinder and step geometry is extruded in Z, so uniform inflow with slip Z faces
 
 | Location | Responsibility |
 |----------|----------------|
+| `src/lib.rs` | Numerical core shared by the web server and benchmark |
 | `src/main.rs` | Axum `/simulate` endpoint, Tokio runtime, simulation worker, and bounded SSE streaming |
 | `src/config.rs` | Request validation, geometry presets, and face boundary mapping |
 | `src/piso.rs` | Momentum prediction, pressure CG solve, and velocity correction |
@@ -81,7 +82,8 @@ Cylinder and step geometry is extruded in Z, so uniform inflow with slip Z faces
 | `src/fields.rs`, `src/mesh.rs` | Field storage, boundary types, and uniform mesh indexing |
 | `src/geometry.rs` | STL loading and voxel classification |
 | `src/visualization.rs` | Block-averaged velocity grid and conservative obstacle mask for streamlines |
-| `src/benchmark.rs` | Ghia et al. Re=100 reference table and comparison helper; not yet wired into a benchmark runner or the binary module tree |
+| `src/benchmark.rs` | Compiled Ghia et al. Re=100 reference table, profile interpolation, and error comparisons |
+| `examples/cavity.rs`, `scripts/validate_cavity.py` | Reproducible cavity run, machine-readable metrics, and comparison plots |
 | `ui/` | React 19, React Three Fiber, Three.js, Vite, and visualization tests |
 | `openfoam/` | Standalone OpenFOAM mesh-generation starter case |
 
@@ -101,15 +103,44 @@ npm run lint
 npm run build
 ```
 
-The current suite has 11 Rust tests and 5 frontend numerical tests. Rust checks include preset voxelization, request validation, face mapping, gradient and diffusion behavior, solid exclusion, Poisson convergence for a manufactured linear field, density scaling, and streamed frame contents. Frontend tests cover interpolation, an analytic 3D helix, obstacle/stagnation stopping, and inlet seeding. CI runs both test suites and the frontend lint/build.
+The current suite has 15 Rust tests and 5 frontend numerical tests. Rust checks include preset voxelization, request validation, face mapping, gradient and diffusion behavior, solid exclusion, pressure-gradient recovery, projection conservation with solid cells and outlets, density scaling, and streamed frame contents. Frontend tests cover interpolation, an analytic 3D helix, obstacle/stagnation stopping, and inlet seeding. CI runs both test suites and the frontend lint/build.
 
-These tests do not validate a steady cavity solution against Ghia et al. The reference table's helper tests are currently outside the compiled module tree. Completing a 100-step UI run also does not establish steady-state convergence.
+The reference table and interpolation tests now run under `cargo test`. The longer cavity comparison runs separately in the [Re=100 cavity report workflow](.github/workflows/cavity-benchmark.yml). Completing a 100-step UI run does not establish steady-state convergence.
 
 For constant density, the solver stores physical pressure: ∇²p = (ρ/Δt)∇·u* and u = u* − (Δt/ρ)∇p. At fixed kinematic viscosity and velocity boundaries, changing density scales pressure while preserving velocity; a regression test checks this behavior. Closed-domain pressure has an arbitrary additive constant.
 
+### Re=100 lid-driven cavity benchmark
+
+![Re=100 cavity centerline comparison with Ghia and convergence diagnostics](docs/validation/cavity-re100/comparison.png)
+
+The benchmark uses the same `piso::advance` numerical core and cavity face mapping as the web API, with U=L=ρ=1 and ν=0.01. It compares horizontal velocity on the vertical centerline against the 17 published Ghia et al. Re=100 samples. Both homogeneous-Z grids pass all three criteria: steady change, reference agreement, and discrete divergence.
+
+| Grid | Δt | Steps | Final time | Max change rate | Max centerline error | RMS error | Max divergence | Result |
+|------|----|-------|------------|-----------------|----------------------|-----------|----------------|--------|
+| 32 × 32 × 1 | 0.002 | 9,480 | 18.960 | 8.811 × 10⁻⁷ | 0.02319450 | 0.01087333 | 2.414 × 10⁻¹⁰ | **PASS** |
+| 64 × 64 × 1 | 0.001 | 20,253 | 20.253 | 9.414 × 10⁻⁷ | 0.01299489 | 0.00518392 | 4.715 × 10⁻¹¹ | **PASS** |
+
+Acceptance requires maximum |Δu|/Δt below 10⁻⁶ for 100 consecutive steps, maximum centerline error ≤ 0.05 U_lid, and full-domain maximum |div u| ≤ 0.01 U_lid/L, including boundary-adjacent cells. Velocity errors are normalized by U_lid; divergence is normalized by U_lid/L.
+
+The pressure solve now applies the same discrete divergence and gradient operators as the velocity correction, including boundary and solid faces. This reduces maximum divergence from **1.52891 to 2.414 × 10⁻¹⁰** on the 32 × 32 grid and from **4.24472 to 4.715 × 10⁻¹¹** on the 64 × 64 grid. These results validate the stated cavity criteria; broader solver validation remains open.
+
+```bash
+# From the repository root; Python 3 with Matplotlib is needed only for plots
+python3 -m pip install -r scripts/requirements-validation.txt
+python3 scripts/validate_cavity.py
+
+# Strict validation: writes the report/plots, then exits 2 if a criterion fails
+python3 scripts/validate_cavity.py --check
+
+# Refined grid with the same strict criteria
+python3 scripts/validate_cavity.py --n 64 --dt 0.001 --output docs/validation/cavity-re100-64 --check
+```
+
+For a Rust-only run, use `cargo run --release --example cavity`. JSON, CSV, PNG, and SVG artifacts and the exact setup, criteria, and interpretation are documented in the [benchmark report](docs/validation/README.md). Report mode produces diagnostics even for a failed validation; a successful report workflow is not a numerical-validation pass.
+
 ## Current limits and roadmap
 
-The grid, domain, timestep (0.1), step count (100), and pressure iteration cap (100) are fixed. Numerical cell loops are serial, and CG has no preconditioner. The collocated projection needs quantitative conservation and accuracy validation; it does not guarantee exactly zero discrete divergence.
+The web API grid, domain, timestep (0.1), step count (100), and pressure iteration cap (100) are fixed. The standalone benchmark accepts its own resolution, timestep, and step limit. Numerical cell loops are serial, and CG has no preconditioner. The compatible collocated projection reduces discrete divergence to the pressure-solve residual, subject to the iteration cap and compatible prescribed boundary fluxes. Broader accuracy validation remains necessary; pressure null modes can occur on collocated grids.
 
 Streamlines are instantaneous curves recomputed from each snapshot, rather than time-dependent particle pathlines. The conservative coarse obstacle mask can terminate them before the visible surface. The cut plane is fixed at Z-mid. There is no volume raymarching, isosurface extraction, adaptive mesh, or OpenFOAM mesh importer.
 
@@ -119,7 +150,8 @@ Streamlines are instantaneous curves recomputed from each snapshot, rather than 
 - [x] Complete voxel instance rendering, low-opacity context, and default arrows
 - [x] 3D RK4 streamlines with obstacle-aware interpolation
 - [x] Numerical regression tests and CI test steps
-- [ ] Automated Re=100 lid-driven cavity run and reference comparison plot
+- [x] Automated Re=100 lid-driven cavity run and reference comparison plot
+- [x] Resolve the cavity benchmark’s discrete divergence failure
 - [x] README screenshot and animation captured from a real simulation
 - [ ] Interactive cut-plane position/orientation and velocity-component coloring
 - [ ] Jacobi-preconditioned CG and parallel cell loops

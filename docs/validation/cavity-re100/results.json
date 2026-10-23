@@ -1,0 +1,846 @@
+{
+  "case": "lid_driven_cavity",
+  "comparison": [
+    {
+      "absolute_error": 0.0,
+      "reference": 1.0,
+      "simulated": 1.0,
+      "y": 1.0
+    },
+    {
+      "absolute_error": 0.004209652421714338,
+      "reference": 0.84123,
+      "simulated": 0.8370203475782857,
+      "y": 0.9766
+    },
+    {
+      "absolute_error": 0.005291724989722302,
+      "reference": 0.78871,
+      "simulated": 0.7834182750102777,
+      "y": 0.9688
+    },
+    {
+      "absolute_error": 0.008091003616294334,
+      "reference": 0.73722,
+      "simulated": 0.7291289963837057,
+      "y": 0.9609
+    },
+    {
+      "absolute_error": 0.011616739942587606,
+      "reference": 0.68717,
+      "simulated": 0.6755532600574123,
+      "y": 0.9531
+    },
+    {
+      "absolute_error": 0.014919355943803225,
+      "reference": 0.23151,
+      "simulated": 0.21659064405619677,
+      "y": 0.8516
+    },
+    {
+      "absolute_error": 0.023194504686854904,
+      "reference": 0.00332,
+      "simulated": -0.019874504686854904,
+      "y": 0.7344
+    },
+    {
+      "absolute_error": 0.0071390178739079435,
+      "reference": -0.13641,
+      "simulated": -0.14354901787390795,
+      "y": 0.6172
+    },
+    {
+      "absolute_error": 0.015179387166675856,
+      "reference": -0.20581,
+      "simulated": -0.19063061283332414,
+      "y": 0.5
+    },
+    {
+      "absolute_error": 0.019760445442742053,
+      "reference": -0.2109,
+      "simulated": -0.19113955455725795,
+      "y": 0.4531
+    },
+    {
+      "absolute_error": 0.0158690430049295,
+      "reference": -0.15662,
+      "simulated": -0.1407509569950705,
+      "y": 0.2813
+    },
+    {
+      "absolute_error": 0.007319729319114551,
+      "reference": -0.1015,
+      "simulated": -0.09418027068088546,
+      "y": 0.1719
+    },
+    {
+      "absolute_error": 0.0032991775598723294,
+      "reference": -0.06434,
+      "simulated": -0.061040822440127665,
+      "y": 0.1016
+    },
+    {
+      "absolute_error": 0.0031589640729651966,
+      "reference": -0.04775,
+      "simulated": -0.044591035927034804,
+      "y": 0.0703
+    },
+    {
+      "absolute_error": 0.0017482778160838042,
+      "reference": -0.04192,
+      "simulated": -0.040171722183916195,
+      "y": 0.0625
+    },
+    {
+      "absolute_error": 0.0014175915592024094,
+      "reference": -0.03717,
+      "simulated": -0.03575240844079759,
+      "y": 0.0547
+    },
+    {
+      "absolute_error": 0.0,
+      "reference": 0.0,
+      "simulated": 0.0,
+      "y": 0.0
+    }
+  ],
+  "converged": true,
+  "criteria": {
+    "consecutive_steady_steps": 100,
+    "max_centerline_error": 0.05,
+    "max_divergence": 0.01,
+    "steady_change_rate": 1e-6
+  },
+  "density": 1.0,
+  "dimensions": [
+    32,
+    32,
+    1
+  ],
+  "domain": [
+    1.0,
+    1.0,
+    0.03125
+  ],
+  "dt": 0.002,
+  "history": [
+    {
+      "max_divergence": 2.331932355548183e-10,
+      "step": 100,
+      "time": 0.2,
+      "velocity_change_rate": 1.146890689835367
+    },
+    {
+      "max_divergence": 1.894297774196474e-10,
+      "step": 200,
+      "time": 0.4,
+      "velocity_change_rate": 0.553913535442721
+    },
+    {
+      "max_divergence": 1.7606286220606115e-10,
+      "step": 300,
+      "time": 0.6,
+      "velocity_change_rate": 0.34251281659371247
+    },
+    {
+      "max_divergence": 2.9095022658492953e-10,
+      "step": 400,
+      "time": 0.8,
+      "velocity_change_rate": 0.2380281465498152
+    },
+    {
+      "max_divergence": 2.314524891189329e-10,
+      "step": 500,
+      "time": 1.0,
+      "velocity_change_rate": 0.17452503330199487
+    },
+    {
+      "max_divergence": 1.8396340006887613e-10,
+      "step": 600,
+      "time": 1.2,
+      "velocity_change_rate": 0.1332044427641843
+    },
+    {
+      "max_divergence": 2.1063784050312506e-10,
+      "step": 700,
+      "time": 1.4000000000000001,
+      "velocity_change_rate": 0.10425164512641721
+    },
+    {
+      "max_divergence": 1.7235235461043885e-10,
+      "step": 800,
+      "time": 1.6,
+      "velocity_change_rate": 0.08364736831951991
+    },
+    {
+      "max_divergence": 1.6278511871803403e-10,
+      "step": 900,
+      "time": 1.8,
+      "velocity_change_rate": 0.06775068520190833
+    },
+    {
+      "max_divergence": 2.53019366092469e-10,
+      "step": 1000,
+      "time": 2.0,
+      "velocity_change_rate": 0.056513423580133865
+    },
+    {
+      "max_divergence": 2.8655651809761373e-10,
+      "step": 1100,
+      "time": 2.2,
+      "velocity_change_rate": 0.04755761318926688
+    },
+    {
+      "max_divergence": 2.0240894810924503e-10,
+      "step": 1200,
+      "time": 2.4,
+      "velocity_change_rate": 0.04010636045035515
+    },
+    {
+      "max_divergence": 1.5172366141236182e-10,
+      "step": 1300,
+      "time": 2.6,
+      "velocity_change_rate": 0.033996000381796704
+    },
+    {
+      "max_divergence": 1.4356160704664944e-10,
+      "step": 1400,
+      "time": 2.8000000000000003,
+      "velocity_change_rate": 0.029238321513117352
+    },
+    {
+      "max_divergence": 1.4347456556151883e-10,
+      "step": 1500,
+      "time": 3.0,
+      "velocity_change_rate": 0.025226005271239544
+    },
+    {
+      "max_divergence": 1.5573956013703594e-10,
+      "step": 1600,
+      "time": 3.2,
+      "velocity_change_rate": 0.021790557652112467
+    },
+    {
+      "max_divergence": 1.9038387533143464e-10,
+      "step": 1700,
+      "time": 3.4,
+      "velocity_change_rate": 0.018905617483420675
+    },
+    {
+      "max_divergence": 1.6872968994219306e-10,
+      "step": 1800,
+      "time": 3.6,
+      "velocity_change_rate": 0.016422321670634017
+    },
+    {
+      "max_divergence": 1.4724027552759367e-10,
+      "step": 1900,
+      "time": 3.8000000000000003,
+      "velocity_change_rate": 0.014281939157366128
+    },
+    {
+      "max_divergence": 1.8552026581630798e-10,
+      "step": 2000,
+      "time": 4.0,
+      "velocity_change_rate": 0.012452244288176529
+    },
+    {
+      "max_divergence": 1.592384002435665e-10,
+      "step": 2100,
+      "time": 4.2,
+      "velocity_change_rate": 0.010891969432638184
+    },
+    {
+      "max_divergence": 1.3906875651059636e-10,
+      "step": 2200,
+      "time": 4.4,
+      "velocity_change_rate": 0.009534970944670429
+    },
+    {
+      "max_divergence": 1.2530643189734292e-10,
+      "step": 2300,
+      "time": 4.6000000000000005,
+      "velocity_change_rate": 0.008351368355460041
+    },
+    {
+      "max_divergence": 2.002845320148161e-10,
+      "step": 2400,
+      "time": 4.8,
+      "velocity_change_rate": 0.0073195441969882424
+    },
+    {
+      "max_divergence": 1.7950353703444222e-10,
+      "step": 2500,
+      "time": 5.0,
+      "velocity_change_rate": 0.006417584092554152
+    },
+    {
+      "max_divergence": 1.582896869134487e-10,
+      "step": 2600,
+      "time": 5.2,
+      "velocity_change_rate": 0.005636928805268643
+    },
+    {
+      "max_divergence": 1.7888135417365447e-10,
+      "step": 2700,
+      "time": 5.4,
+      "velocity_change_rate": 0.004953357422400953
+    },
+    {
+      "max_divergence": 1.5546186560300157e-10,
+      "step": 2800,
+      "time": 5.6000000000000005,
+      "velocity_change_rate": 0.004353879929587003
+    },
+    {
+      "max_divergence": 1.9415008489787056e-10,
+      "step": 2900,
+      "time": 5.8,
+      "velocity_change_rate": 0.0038278985821814035
+    },
+    {
+      "max_divergence": 1.6955353787651006e-10,
+      "step": 3000,
+      "time": 6.0,
+      "velocity_change_rate": 0.0033660305039148047
+    },
+    {
+      "max_divergence": 1.4837253647925763e-10,
+      "step": 3100,
+      "time": 6.2,
+      "velocity_change_rate": 0.0029726476881708486
+    },
+    {
+      "max_divergence": 2.3168587881539082e-10,
+      "step": 3200,
+      "time": 6.4,
+      "velocity_change_rate": 0.002628790308614737
+    },
+    {
+      "max_divergence": 2.0436598940909434e-10,
+      "step": 3300,
+      "time": 6.6000000000000005,
+      "velocity_change_rate": 0.0023231868977180437
+    },
+    {
+      "max_divergence": 1.8026991011055316e-10,
+      "step": 3400,
+      "time": 6.8,
+      "velocity_change_rate": 0.0020519312186190186
+    },
+    {
+      "max_divergence": 1.590027484676959e-10,
+      "step": 3500,
+      "time": 7.0,
+      "velocity_change_rate": 0.0018114334431190704
+    },
+    {
+      "max_divergence": 2.558828739174235e-10,
+      "step": 3600,
+      "time": 7.2,
+      "velocity_change_rate": 0.0015984155745663031
+    },
+    {
+      "max_divergence": 2.2480584407902349e-10,
+      "step": 3700,
+      "time": 7.4,
+      "velocity_change_rate": 0.0014099002169642993
+    },
+    {
+      "max_divergence": 1.9755823366107705e-10,
+      "step": 3800,
+      "time": 7.6000000000000005,
+      "velocity_change_rate": 0.0012431949625996142
+    },
+    {
+      "max_divergence": 2.261071538334214e-10,
+      "step": 3900,
+      "time": 7.8,
+      "velocity_change_rate": 0.0010958768567603805
+    },
+    {
+      "max_divergence": 1.9904852766039483e-10,
+      "step": 4000,
+      "time": 8.0,
+      "velocity_change_rate": 0.000965771115815639
+    },
+    {
+      "max_divergence": 1.7523733158997246e-10,
+      "step": 4100,
+      "time": 8.2,
+      "velocity_change_rate": 0.0008509164649422862
+    },
+    {
+      "max_divergence": 2.1606583189281992e-10,
+      "step": 4200,
+      "time": 8.4,
+      "velocity_change_rate": 0.0007495716845135059
+    },
+    {
+      "max_divergence": 1.902092372496611e-10,
+      "step": 4300,
+      "time": 8.6,
+      "velocity_change_rate": 0.000660183322703789
+    },
+    {
+      "max_divergence": 1.6268361657800767e-10,
+      "step": 4400,
+      "time": 8.8,
+      "velocity_change_rate": 0.0005813730222792302
+    },
+    {
+      "max_divergence": 2.2704971930354034e-10,
+      "step": 4500,
+      "time": 9.0,
+      "velocity_change_rate": 0.0005119089141331079
+    },
+    {
+      "max_divergence": 1.998325394048095e-10,
+      "step": 4600,
+      "time": 9.200000000000001,
+      "velocity_change_rate": 0.00045069840433342723
+    },
+    {
+      "max_divergence": 1.9580931320817285e-10,
+      "step": 4700,
+      "time": 9.4,
+      "velocity_change_rate": 0.0003967726720788267
+    },
+    {
+      "max_divergence": 2.6188253302028563e-10,
+      "step": 4800,
+      "time": 9.6,
+      "velocity_change_rate": 0.0003492731272258798
+    },
+    {
+      "max_divergence": 2.2992391237458554e-10,
+      "step": 4900,
+      "time": 9.8,
+      "velocity_change_rate": 0.000307440169627915
+    },
+    {
+      "max_divergence": 2.0626877007649813e-10,
+      "step": 5000,
+      "time": 10.0,
+      "velocity_change_rate": 0.0002706025718640648
+    },
+    {
+      "max_divergence": 3.073801699282619e-10,
+      "step": 5100,
+      "time": 10.200000000000001,
+      "velocity_change_rate": 0.00023816727058589837
+    },
+    {
+      "max_divergence": 2.7270030157622305e-10,
+      "step": 5200,
+      "time": 10.4,
+      "velocity_change_rate": 0.0002096112433208619
+    },
+    {
+      "max_divergence": 2.394384707865571e-10,
+      "step": 5300,
+      "time": 10.6,
+      "velocity_change_rate": 0.00018447265882903796
+    },
+    {
+      "max_divergence": 2.454902062881681e-10,
+      "step": 5400,
+      "time": 10.8,
+      "velocity_change_rate": 0.00016234433858342
+    },
+    {
+      "max_divergence": 2.1304637567998164e-10,
+      "step": 5500,
+      "time": 11.0,
+      "velocity_change_rate": 0.00014286666898122302
+    },
+    {
+      "max_divergence": 3.213644420019257e-10,
+      "step": 5600,
+      "time": 11.200000000000001,
+      "velocity_change_rate": 0.00012572282936940127
+    },
+    {
+      "max_divergence": 2.45680739641152e-10,
+      "step": 5700,
+      "time": 11.4,
+      "velocity_change_rate": 0.00011063546948020253
+    },
+    {
+      "max_divergence": 2.1832730068283013e-10,
+      "step": 5800,
+      "time": 11.6,
+      "velocity_change_rate": 0.00009735575834390886
+    },
+    {
+      "max_divergence": 2.0424145708020092e-10,
+      "step": 5900,
+      "time": 11.8,
+      "velocity_change_rate": 0.00008567200861231417
+    },
+    {
+      "max_divergence": 1.904157942433926e-10,
+      "step": 6000,
+      "time": 12.0,
+      "velocity_change_rate": 0.00007539059486416644
+    },
+    {
+      "max_divergence": 1.8131141032995401e-10,
+      "step": 6100,
+      "time": 12.200000000000001,
+      "velocity_change_rate": 0.00006634180266251732
+    },
+    {
+      "max_divergence": 1.8398310652756322e-10,
+      "step": 6200,
+      "time": 12.4,
+      "velocity_change_rate": 0.00005837829074317735
+    },
+    {
+      "max_divergence": 1.626320050851504e-10,
+      "step": 6300,
+      "time": 12.6,
+      "velocity_change_rate": 0.00005137043318503842
+    },
+    {
+      "max_divergence": 1.3713441493479195e-10,
+      "step": 6400,
+      "time": 12.8,
+      "velocity_change_rate": 0.00004520359689341724
+    },
+    {
+      "max_divergence": 2.1016921536443078e-10,
+      "step": 6500,
+      "time": 13.0,
+      "velocity_change_rate": 0.00003977780307917733
+    },
+    {
+      "max_divergence": 1.8990692352005567e-10,
+      "step": 6600,
+      "time": 13.200000000000001,
+      "velocity_change_rate": 0.000035001783554866606
+    },
+    {
+      "max_divergence": 1.5681933529521075e-10,
+      "step": 6700,
+      "time": 13.4,
+      "velocity_change_rate": 0.000030799219077892737
+    },
+    {
+      "max_divergence": 1.4631139355625322e-10,
+      "step": 6800,
+      "time": 13.6,
+      "velocity_change_rate": 0.00002710460085542099
+    },
+    {
+      "max_divergence": 1.501420099359052e-10,
+      "step": 6900,
+      "time": 13.8,
+      "velocity_change_rate": 0.000023850653466106486
+    },
+    {
+      "max_divergence": 1.648341046989188e-10,
+      "step": 7000,
+      "time": 14.0,
+      "velocity_change_rate": 0.00002098667499506046
+    },
+    {
+      "max_divergence": 1.9895141090131574e-10,
+      "step": 7100,
+      "time": 14.200000000000001,
+      "velocity_change_rate": 0.000018470500739997675
+    },
+    {
+      "max_divergence": 2.2486429385182305e-10,
+      "step": 7200,
+      "time": 14.4,
+      "velocity_change_rate": 0.000016248243125960293
+    },
+    {
+      "max_divergence": 2.275420962760677e-10,
+      "step": 7300,
+      "time": 14.6,
+      "velocity_change_rate": 0.000014296734227037255
+    },
+    {
+      "max_divergence": 1.8118961886415264e-10,
+      "step": 7400,
+      "time": 14.8,
+      "velocity_change_rate": 0.000012579954092317713
+    },
+    {
+      "max_divergence": 1.8990187200529363e-10,
+      "step": 7500,
+      "time": 15.0,
+      "velocity_change_rate": 0.000011070125260914665
+    },
+    {
+      "max_divergence": 2.311697500090304e-10,
+      "step": 7600,
+      "time": 15.200000000000001,
+      "velocity_change_rate": 9.740634590582609e-6
+    },
+    {
+      "max_divergence": 2.1785750980996e-10,
+      "step": 7700,
+      "time": 15.4,
+      "velocity_change_rate": 8.570550560915713e-6
+    },
+    {
+      "max_divergence": 2.1366455826843378e-10,
+      "step": 7800,
+      "time": 15.6,
+      "velocity_change_rate": 7.54185464080237e-6
+    },
+    {
+      "max_divergence": 2.2590640469388745e-10,
+      "step": 7900,
+      "time": 15.8,
+      "velocity_change_rate": 6.636205543419926e-6
+    },
+    {
+      "max_divergence": 1.8788248734580293e-10,
+      "step": 8000,
+      "time": 16.0,
+      "velocity_change_rate": 5.838609012931428e-6
+    },
+    {
+      "max_divergence": 1.8830537129588265e-10,
+      "step": 8100,
+      "time": 16.2,
+      "velocity_change_rate": 5.137930608745123e-6
+    },
+    {
+      "max_divergence": 1.8385350186722604e-10,
+      "step": 8200,
+      "time": 16.4,
+      "velocity_change_rate": 4.5198817605340835e-6
+    },
+    {
+      "max_divergence": 2.2260820964348227e-10,
+      "step": 8300,
+      "time": 16.6,
+      "velocity_change_rate": 3.978210635913193e-6
+    },
+    {
+      "max_divergence": 2.0177756687722592e-10,
+      "step": 8400,
+      "time": 16.8,
+      "velocity_change_rate": 3.4998583336998124e-6
+    },
+    {
+      "max_divergence": 2.2575030733662516e-10,
+      "step": 8500,
+      "time": 17.0,
+      "velocity_change_rate": 3.0814248375143904e-6
+    },
+    {
+      "max_divergence": 1.8495160958309498e-10,
+      "step": 8600,
+      "time": 17.2,
+      "velocity_change_rate": 2.712697108608886e-6
+    },
+    {
+      "max_divergence": 1.4711376561393763e-10,
+      "step": 8700,
+      "time": 17.400000000000002,
+      "velocity_change_rate": 2.3850802999270115e-6
+    },
+    {
+      "max_divergence": 1.271629468391211e-10,
+      "step": 8800,
+      "time": 17.6,
+      "velocity_change_rate": 2.0990330862336037e-6
+    },
+    {
+      "max_divergence": 2.51101139880916e-10,
+      "step": 8900,
+      "time": 17.8,
+      "velocity_change_rate": 1.847534777943416e-6
+    },
+    {
+      "max_divergence": 1.8846132987526687e-10,
+      "step": 9000,
+      "time": 18.0,
+      "velocity_change_rate": 1.6242894113061013e-6
+    },
+    {
+      "max_divergence": 2.333386817099381e-10,
+      "step": 9100,
+      "time": 18.2,
+      "velocity_change_rate": 1.429642210171167e-6
+    },
+    {
+      "max_divergence": 2.7507485178546176e-10,
+      "step": 9200,
+      "time": 18.400000000000002,
+      "velocity_change_rate": 1.2589485703928815e-6
+    },
+    {
+      "max_divergence": 2.0741630635257025e-10,
+      "step": 9300,
+      "time": 18.6,
+      "velocity_change_rate": 1.1053477300126957e-6
+    },
+    {
+      "max_divergence": 2.0811641299189887e-10,
+      "step": 9400,
+      "time": 18.8,
+      "velocity_change_rate": 9.753059748707216e-7
+    }
+  ],
+  "kinematic_viscosity": 0.01,
+  "lid_speed": 1.0,
+  "max_centerline_error": 0.023194504686854904,
+  "max_divergence": 2.4141666443711074e-10,
+  "max_steps": 30000,
+  "passed": true,
+  "pressure_gauge": "zero spatial mean after each step",
+  "profile": [
+    {
+      "u": 0.0,
+      "y": 0.0
+    },
+    {
+      "u": -0.011522419869599567,
+      "y": 0.015625
+    },
+    {
+      "u": -0.031318930230553606,
+      "y": 0.046875
+    },
+    {
+      "u": -0.04902451413727879,
+      "y": 0.078125
+    },
+    {
+      "u": -0.06502066470017666,
+      "y": 0.109375
+    },
+    {
+      "u": -0.07996345601786957,
+      "y": 0.140625
+    },
+    {
+      "u": -0.09416930530536122,
+      "y": 0.171875
+    },
+    {
+      "u": -0.10787602471065458,
+      "y": 0.203125
+    },
+    {
+      "u": -0.12132398743014991,
+      "y": 0.234375
+    },
+    {
+      "u": -0.13435655113316536,
+      "y": 0.265625
+    },
+    {
+      "u": -0.14710456919916448,
+      "y": 0.296875
+    },
+    {
+      "u": -0.15901293240739872,
+      "y": 0.328125
+    },
+    {
+      "u": -0.1700825158663955,
+      "y": 0.359375
+    },
+    {
+      "u": -0.17937982702946528,
+      "y": 0.390625
+    },
+    {
+      "u": -0.1868076565272999,
+      "y": 0.421875
+    },
+    {
+      "u": -0.19114302285031637,
+      "y": 0.453125
+    },
+    {
+      "u": -0.19230236577553206,
+      "y": 0.484375
+    },
+    {
+      "u": -0.18895885989111622,
+      "y": 0.515625
+    },
+    {
+      "u": -0.1812345217843006,
+      "y": 0.546875
+    },
+    {
+      "u": -0.16796559972055497,
+      "y": 0.578125
+    },
+    {
+      "u": -0.14962119222015283,
+      "y": 0.609375
+    },
+    {
+      "u": -0.12537129467125147,
+      "y": 0.640625
+    },
+    {
+      "u": -0.09593813166117204,
+      "y": 0.671875
+    },
+    {
+      "u": -0.06069250075965893,
+      "y": 0.703125
+    },
+    {
+      "u": -0.019912519326696757,
+      "y": 0.734375
+    },
+    {
+      "u": 0.02760578047552018,
+      "y": 0.765625
+    },
+    {
+      "u": 0.08368364339507942,
+      "y": 0.796875
+    },
+    {
+      "u": 0.1518247445716251,
+      "y": 0.828125
+    },
+    {
+      "u": 0.23804133067994726,
+      "y": 0.859375
+    },
+    {
+      "u": 0.34893138594946416,
+      "y": 0.890625
+    },
+    {
+      "u": 0.4938671341724099,
+      "y": 0.921875
+    },
+    {
+      "u": 0.675698725330339,
+      "y": 0.953125
+    },
+    {
+      "u": 0.8904506186316523,
+      "y": 0.984375
+    },
+    {
+      "u": 1.0,
+      "y": 1.0
+    }
+  ],
+  "reference": "Ghia, Ghia & Shin (1982), Table I, Re=100; DOI: 10.1016/0021-9991(82)90058-4",
+  "reynolds": 100,
+  "rms_centerline_error": 0.01087332934760993,
+  "schema_version": 1,
+  "solver": "piso::advance, unchanged from web API; compatible D(G(p)) pressure CG cap 100, absolute L2 tolerance 1e-6",
+  "steps": 9480,
+  "time": 18.96,
+  "velocity_change_rate": 8.811366081218353e-7,
+  "z_condition": "slip; homogeneous extruded 2D case"
+}

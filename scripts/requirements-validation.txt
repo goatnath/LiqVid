@@ -1,0 +1,2 @@
+# Optional: only used for benchmark plots; Rust produces results.json on its own.
+matplotlib>=3.8,<4

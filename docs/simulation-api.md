@@ -62,5 +62,7 @@ slightly before an obstacle surface.
 
 The explicit timestep (0.1), step count (100), and pressure iteration cap (100)
 remain fixed. Completing these steps does not establish steady-state convergence.
-The collocated projection solver still needs a quantitative cavity benchmark;
-the regression tests do not establish agreement with a reference CFD solution.
+The [standalone Re=100 cavity benchmark](validation/README.md) measures reference
+agreement, steady change, and discrete divergence; its documented runs pass all
+three criteria. A completed API run or passing unit tests do not establish a
+validated CFD solution.

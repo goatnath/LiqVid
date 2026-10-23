@@ -12,7 +12,8 @@ from planned validation; a green CI run does not establish benchmark accuracy.
 - [x] Evaluate boundary values per face rather than overwriting corner cell velocities in a face-order loop.
 - [x] Run `cargo test` and frontend numerical tests in CI.
 - [ ] Add a corner/edge regression that checks simultaneous inlet and wall face fluxes.
-- [ ] Quantify the divergence remaining after collocated velocity correction, including near solids and boundaries.
+- [x] Measure full-domain maximum divergence for the Re=100 cavity.
+- [x] Repair the projection with a compatible discrete divergence/gradient composition, including boundary/solid behavior; add conservation regressions.
 - [ ] Check compatibility and pressure gauge handling for closed or disconnected fluid regions and incompatible prescribed fluxes.
 
 The density formulation is ∇²p = (ρ/Δt)∇·u* followed by
@@ -26,10 +27,11 @@ required correction; it would also require converting outlet and display units.
 - [x] Keep FVC stencil loops in readable multiline form.
 - [x] Enable arrows by default and add 3D RK4 streamlines.
 - [x] Capture an actual UI screenshot and cylinder-flow animation for the README; include capture settings and avoid presenting them as validation evidence.
-- [ ] Wire `src/benchmark.rs` into an executable benchmark/test target; its current helper tests do not run under `cargo test`.
-- [ ] Run a cavity at Re = UL/ν = 100 with explicit dimensions, lid speed, timestep, resolution, convergence criterion, and pressure gauge.
-- [ ] Sample the normalized vertical centerline velocity, compare with the reference table, and report maximum error and residuals.
-- [ ] Add a reproducible comparison plot to the README. Report measured errors even if the benchmark fails; do not label a transient run as validated.
+- [x] Wire `src/benchmark.rs` into the shared library, executable example, and `cargo test`.
+- [x] Run a cavity at Re = UL/ν = 100 with explicit dimensions, lid speed, timestep, resolution, convergence criterion, and pressure gauge.
+- [x] Sample the normalized vertical centerline velocity, compare with the reference table, and report maximum error and steady-change/divergence diagnostics.
+- [x] Add a reproducible comparison plot to the README with measured errors and the divergence criterion.
+- [x] Resolve the failed cavity discrete divergence criterion; broader solver validation remains open. See [benchmark results](validation/README.md).
 - [ ] Add a Z-position slider and XY/XZ/YZ orientation selection with corresponding backend field data.
 - [ ] Implement Ux/Uy/Uz cut-plane data and colors; use a shared field range for the texture and legend, including negative values and a separate solid mask.
 - [x] Capture the default streamline/arrow UI running a cylinder case in a browser with WebGL.

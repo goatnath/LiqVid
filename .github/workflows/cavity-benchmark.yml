@@ -1,0 +1,40 @@
+name: Re=100 cavity report
+
+on:
+  workflow_dispatch:
+    inputs:
+      enforce:
+        description: Fail if any validation criterion fails
+        type: boolean
+        default: false
+  push:
+    branches: [main]
+    paths: ['src/**', 'examples/cavity.rs', 'scripts/*cavity*', 'scripts/requirements-validation.txt', 'Cargo.toml', '.github/workflows/cavity-benchmark.yml']
+  pull_request:
+    paths: ['src/**', 'examples/cavity.rs', 'scripts/*cavity*', 'scripts/requirements-validation.txt', 'Cargo.toml', '.github/workflows/cavity-benchmark.yml']
+
+jobs:
+  cavity:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install plotting dependency
+        run: python -m pip install -r scripts/requirements-validation.txt
+      - name: Run benchmark and generate diagnostic plots
+        run: python scripts/validate_cavity.py --output target/cavity-re100
+      - name: Publish measured criteria in job summary
+        run: cat target/cavity-re100/summary.txt >> "$GITHUB_STEP_SUMMARY"
+      - name: Enforce all criteria when explicitly selected
+        if: github.event_name == 'workflow_dispatch' && inputs.enforce
+        run: python scripts/validate_cavity.py --plot-only --output target/cavity-re100 --check
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: cavity-re100-report
+          path: target/cavity-re100/
+          if-no-files-found: error
