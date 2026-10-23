@@ -1,6 +1,8 @@
 import { useRef, useMemo, useEffect } from 'react';
 import * as THREE from 'three';
 import { getCfdColor } from './colormap';
+import { buildStreamlines } from './streamlines';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
 // Continuous 2D Cut Plane — supports multiple field types
 export function ContinuousFluidSlice({ sliceData, pressureSlice, nx = 50, ny = 50, minMag = 0.0, maxMag = 1.0, sliceZ = 0, activeField = 'velocity_mag' }) {
@@ -56,7 +58,7 @@ export function ContinuousFluidSlice({ sliceData, pressureSlice, nx = 50, ny = 5
           imgData.data[pixelIdx + 2] = 30;
           imgData.data[pixelIdx + 3] = 255;
         } else {
-          const { rgb, norm } = getCfdColor(val, useMin, useMax);
+          const { rgb } = getCfdColor(val, useMin, useMax);
           imgData.data[pixelIdx] = rgb[0];
           imgData.data[pixelIdx + 1] = rgb[1];
           imgData.data[pixelIdx + 2] = rgb[2];
@@ -89,17 +91,15 @@ export function ContinuousFluidSlice({ sliceData, pressureSlice, nx = 50, ny = 5
   );
 }
 
-// Continuous 3D Fluid Body using InstancedMesh for performance
-// FIXED: Uses InstancedMesh instead of mapping thousands of individual meshes
+// Optional voxel context. Capacity follows the complete streamed frame.
 export function ContinuousFluidBody({ cells, cellW = 4.0, cellH = 4.0, cellD = 4.0, minMag = 0.0, maxMag = 1.0 }) {
   const meshRef = useRef();
   const tempObject = useMemo(() => new THREE.Object3D(), []);
-  const maxCount = 5000; // Upper bound for instance count
+  const count = cells?.length || 0;
 
   useEffect(() => {
     if (!meshRef.current || !cells || cells.length === 0) return;
 
-    const count = Math.min(cells.length, maxCount);
     meshRef.current.count = count;
 
     for (let i = 0; i < count; i++) {
@@ -119,16 +119,16 @@ export function ContinuousFluidBody({ cells, cellW = 4.0, cellH = 4.0, cellD = 4
     if (meshRef.current.instanceColor) {
       meshRef.current.instanceColor.needsUpdate = true;
     }
-  }, [cells, cellW, cellH, cellD, minMag, maxMag, tempObject]);
+  }, [cells, cellW, cellH, cellD, minMag, maxMag, tempObject, count]);
 
   if (!cells || cells.length === 0) return null;
 
   return (
-    <instancedMesh ref={meshRef} args={[null, null, maxCount]} frustumCulled={false}>
-      <boxGeometry args={[cellW * 1.02, cellH * 1.02, cellD * 1.02]} />
+    <instancedMesh ref={meshRef} args={[null, null, count]} frustumCulled={false}>
+      <boxGeometry args={[cellW * 0.92, cellH * 0.92, cellD * 0.92]} />
       <meshStandardMaterial
         transparent
-        opacity={0.6}
+        opacity={0.025}
         roughness={0.2}
         metalness={0.1}
         depthWrite={false}
@@ -143,17 +143,28 @@ export function ContinuousFluidBody({ cells, cellW = 4.0, cellH = 4.0, cellD = 4
 export function FlowVectorGlyphs({ cells, minMag = 0.0, maxMag = 1.0, stepStride = 2 }) {
   const meshRef = useRef();
   const tempObject = useMemo(() => new THREE.Object3D(), []);
-  const maxCount = 2500;
+  const arrowGeometry = useMemo(() => {
+    const shaft = new THREE.CylinderGeometry(0.12, 0.12, 0.7, 6);
+    shaft.translate(0, 0.35, 0);
+    const head = new THREE.ConeGeometry(0.4, 0.3, 6);
+    head.translate(0, 0.85, 0);
+    const geometry = mergeGeometries([shaft, head]);
+    shaft.dispose();
+    head.dispose();
+    return geometry;
+  }, []);
+  useEffect(() => () => arrowGeometry.dispose(), [arrowGeometry]);
 
   const sampled = useMemo(() => {
     if (!cells) return [];
-    return cells.filter((c, i) => i % stepStride === 0 && c.mag > 0.01);
+    const stride = Math.max(stepStride, Math.ceil(cells.length / 1200));
+    return cells.filter((c, i) => i % stride === 0 && c.mag > 0.01);
   }, [cells, stepStride]);
 
   useEffect(() => {
     if (!meshRef.current || sampled.length === 0) return;
 
-    const count = Math.min(sampled.length, maxCount);
+    const count = sampled.length;
     meshRef.current.count = count;
 
     const up = new THREE.Vector3(0, 1, 0);
@@ -187,9 +198,39 @@ export function FlowVectorGlyphs({ cells, minMag = 0.0, maxMag = 1.0, stepStride
   if (sampled.length === 0) return null;
 
   return (
-    <instancedMesh ref={meshRef} args={[null, null, maxCount]} frustumCulled={false}>
-      <cylinderGeometry args={[0.3, 0.3, 1, 8]} />
+    <instancedMesh ref={meshRef} args={[arrowGeometry, null, sampled.length]} frustumCulled={false}>
       <meshBasicMaterial vertexColors />
     </instancedMesh>
+  );
+}
+
+// Independent line segments let every vertex carry its local speed color.
+export function FlowStreamlines({ grid, boundaries, minMag = 0, maxMag = 1 }) {
+  const { positions, colors } = useMemo(() => {
+    const lines = buildStreamlines(grid, boundaries);
+    const positions = [];
+    const colors = [];
+    for (const points of lines) {
+      for (let i = 1; i < points.length; i++) {
+        for (const point of [points[i - 1], points[i]]) {
+          positions.push(...point.position);
+          const { rgb } = getCfdColor(point.speed, minMag, maxMag);
+          const color = new THREE.Color().setRGB(...rgb.map(v => v / 255), THREE.SRGBColorSpace);
+          colors.push(color.r, color.g, color.b);
+        }
+      }
+    }
+    return { positions: new Float32Array(positions), colors: new Float32Array(colors) };
+  }, [grid, boundaries, minMag, maxMag]);
+
+  if (!positions.length) return null;
+  return (
+    <lineSegments frustumCulled={false}>
+      <bufferGeometry>
+        <bufferAttribute attach="attributes-position" args={[positions, 3]} />
+        <bufferAttribute attach="attributes-color" args={[colors, 3]} />
+      </bufferGeometry>
+      <lineBasicMaterial vertexColors toneMapped={false} />
+    </lineSegments>
   );
 }

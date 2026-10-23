@@ -1,8 +1,7 @@
 import { Canvas } from '@react-three/fiber';
 import { OrbitControls, GizmoHelper, GizmoViewcube } from '@react-three/drei';
-import * as THREE from 'three';
 import DomainBoundaryVisualizer from './DomainBoundaryVisualizer';
-import { ContinuousFluidSlice, ContinuousFluidBody, FlowVectorGlyphs } from './FluidVisualization';
+import { ContinuousFluidSlice, ContinuousFluidBody, FlowVectorGlyphs, FlowStreamlines } from './FluidVisualization';
 
 function AxisIndicator() {
   return <axesHelper args={[15]} />;
@@ -92,6 +91,10 @@ export default function Viewport({
           />
         )}
 
+        {frameData?.flow_grid && layerVisibility.streamlines && (
+          <FlowStreamlines grid={frameData.flow_grid} boundaries={boundaries} minMag={minMag} maxMag={maxMag} />
+        )}
+
         {/* Vector glyphs */}
         {frameData && layerVisibility.vectors && frameData.cells && (
           <FlowVectorGlyphs
@@ -102,6 +105,11 @@ export default function Viewport({
           />
         )}
       </Canvas>
+
+      <div style={{ position: 'absolute', left: 16, top: 16, color: '#ccc', fontSize: 11, maxWidth: 310, pointerEvents: 'none' }}>
+        {layerVisibility.streamlines && <div>3D streamlines · colored by speed |U|</div>}
+        {geometryType === 'channel_cylinder' && <div>Cylinder flow is extruded in Z. Use Box Obstacle or Custom STL for finite 3D geometry.</div>}
+      </div>
 
       {/* Vertical Color Legend */}
       <div className="pv-colorbar" style={{ top: '40px', right: '16px' }}>

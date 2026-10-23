@@ -21,9 +21,10 @@ export default function App() {
   const [layerVisibility, setLayerVisibility] = useState({
     domain: true,
     geometry: true,
-    slice: true,
-    fluidBody: true,
-    vectors: false,
+    slice: false,
+    fluidBody: false,
+    streamlines: true,
+    vectors: true,
   });
   const [selectedLayer, setSelectedLayer] = useState('geometry');
 
@@ -59,6 +60,7 @@ export default function App() {
   // Simulation State
   const [isSimulating, setIsSimulating] = useState(false);
   const [simStatus, setSimStatus] = useState('idle');
+  const [simError, setSimError] = useState('');
   const [frameData, setFrameData] = useState(null);
   const [obstacleVoxels, setObstacleVoxels] = useState([]);
   const [currentStep, setCurrentStep] = useState(0);
@@ -161,14 +163,14 @@ export default function App() {
     const controller = new AbortController();
     abortRef.current = controller;
 
-    let geoPayload = { type: 'box' };
+    let geoPayload = { type: geometryType === 'cavity' ? 'cavity' : 'box' };
     if (geometryType === 'channel_cylinder') {
       geoPayload = { type: 'channel_cylinder', radius: cylinderRadius, center_x: cylinderPos.x, center_y: cylinderPos.y };
     } else if (geometryType === 'step') {
       geoPayload = { type: 'step', step_length: stepParams.length, step_height: stepParams.height };
     } else if (geometryType === 'box_obstacle') {
       geoPayload = { type: 'box_obstacle', ...boxParams };
-    } else if (geometryType === 'stl' && stlBase64) {
+    } else if (geometryType === 'stl') {
       geoPayload = { type: 'stl', stl_base64: stlBase64 };
     }
 
@@ -177,8 +179,6 @@ export default function App() {
       density: fluidProperties.density,
       geometry: geoPayload,
       boundaries: boundaries,
-      inlets: [],
-      stl_base64: stlBase64,
     };
 
     setFrameData(null);
@@ -188,6 +188,7 @@ export default function App() {
     setMaxDiv(0);
     setIsSimulating(true);
     setSimStatus('running');
+    setSimError('');
 
     try {
       const response = await fetch('http://127.0.0.1:3000/simulate', {
@@ -197,6 +198,7 @@ export default function App() {
         signal: controller.signal,
       });
 
+      if (!response.ok) throw new Error(await response.text());
       if (!response.body) throw new Error('ReadableStream not supported.');
 
       const reader = response.body.getReader();
@@ -217,7 +219,9 @@ export default function App() {
         for (let line of lines) {
           if (line.startsWith('data:')) {
             const data = line.substring(line.indexOf(':') + 1).trimStart();
-            if (data.startsWith('[OBSTACLES]')) {
+            if (data.startsWith('[ERROR]')) {
+              throw new Error(data.slice('[ERROR]'.length));
+            } else if (data.startsWith('[OBSTACLES]')) {
               try {
                 const voxels = JSON.parse(data.replace('[OBSTACLES]', ''));
                 setObstacleVoxels(voxels);
@@ -248,10 +252,12 @@ export default function App() {
         }
       }
     } catch (error) {
+      controller.abort();
       if (error.name === 'AbortError') {
         setSimStatus('idle');
       } else {
         setSimStatus('error');
+        setSimError(error.message);
       }
       setIsSimulating(false);
     }
@@ -354,6 +360,7 @@ export default function App() {
         />
       </div>
 
+      {simError && <div role="alert" style={{ color: "#ef4444", padding: "8px" }}>{simError}</div>}
       <StatusBar
         currentStep={currentStep}
         totalSteps={frameData?.total_steps || 100}

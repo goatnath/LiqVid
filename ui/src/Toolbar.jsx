@@ -33,7 +33,8 @@ export default function Toolbar({
       {/* Visualization layer toggle icons */}
       {[
         { id: 'slice', icon: <Grid3x3 size={14} />, title: 'Cut Plane Slice' },
-        { id: 'fluidBody', icon: <Layers size={14} />, title: '3D Fluid Body' },
+        { id: 'streamlines', icon: <Wind size={14} />, title: '3D Streamlines' },
+        { id: 'fluidBody', icon: <Layers size={14} />, title: '3D Voxel Context' },
         { id: 'vectors', icon: <Wind size={14} />, title: 'Vector Glyphs' },
       ].map((item) => (
         <button

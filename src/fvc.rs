@@ -1,265 +1,189 @@
 use crate::fields::{BcType, VolScalarField, VolVectorField};
 use crate::geometry::Geometry;
 use crate::mesh::Mesh;
-
 use nalgebra::Vector3;
 
-pub fn grad(scalar_field: &VolScalarField, mesh: &Mesh, geom: &Geometry) -> VolVectorField {
-    let mut grad_field = VolVectorField::new(mesh, Vector3::new(0.0, 0.0, 0.0));
-
-    for i in 0..(mesh.nx) {
-        for j in 0..(mesh.ny) {
-            for k in 0..(mesh.nz) {
-                let center_idx = mesh.cell_idx(i, j, k);
-                let p_center = scalar_field.internal_field[center_idx];
-
-                //X direction
-                let p_east = if i < mesh.nx - 1 {
-                    if geom.is_solid[mesh.cell_idx(i + 1, j, k)] { p_center } else { (scalar_field.internal_field[mesh.cell_idx(i + 1, j, k)] + p_center) / 2.0 }
-                } else {
-                    match scalar_field.boundary_field.x_max {
-                        BcType::FixedValue(v) => v,
-                        BcType::ZeroGradient => p_center,
-                    }
-                };
-
-                let p_west = if i > 0 {
-                    if geom.is_solid[mesh.cell_idx(i - 1, j, k)] { p_center } else { (scalar_field.internal_field[mesh.cell_idx(i - 1, j, k)] + p_center) / 2.0 }
-                } else {
-                    match scalar_field.boundary_field.x_min {
-                        BcType::FixedValue(v) => v,
-                        BcType::ZeroGradient => p_center,
-                    }
-                };
-
-                let dp_dx = (p_east - p_west) / mesh.dx;
-
-                //Y direction
-                let p_north = if j < mesh.ny - 1 {
-                    if geom.is_solid[mesh.cell_idx(i, j + 1, k)] { p_center } else { (scalar_field.internal_field[mesh.cell_idx(i, j + 1, k)] + p_center) / 2.0 }
-                } else {
-                    match scalar_field.boundary_field.y_max {
-                        BcType::FixedValue(v) => v,
-                        BcType::ZeroGradient => p_center,
-                    }
-                };
-
-                let p_south = if j > 0 {
-                    if geom.is_solid[mesh.cell_idx(i, j - 1, k)] { p_center } else { (scalar_field.internal_field[mesh.cell_idx(i, j - 1, k)] + p_center) / 2.0 }
-                } else {
-                    match scalar_field.boundary_field.y_min {
-                        BcType::FixedValue(v) => v,
-                        BcType::ZeroGradient => p_center,
-                    }
-                };
-
-                let dp_dy = (p_north - p_south) / mesh.dy;
-
-                //Z direction
-                let p_front = if k < mesh.nz - 1 {
-                    if geom.is_solid[mesh.cell_idx(i, j, k + 1)] { p_center } else { (scalar_field.internal_field[mesh.cell_idx(i, j, k + 1)] + p_center) / 2.0 }
-                } else {
-                    match scalar_field.boundary_field.z_max {
-                        BcType::FixedValue(v) => v,
-                        BcType::ZeroGradient => p_center,
-                    }
-                };
-
-                let p_back = if k > 0 {
-                    if geom.is_solid[mesh.cell_idx(i, j, k - 1)] { p_center } else { (scalar_field.internal_field[mesh.cell_idx(i, j, k - 1)] + p_center) / 2.0 }
-                } else {
-                    match scalar_field.boundary_field.z_min {
-                        BcType::FixedValue(v) => v,
-                        BcType::ZeroGradient => p_center,
-                    }
-                };
-
-                let dp_dz = (p_front - p_back) / mesh.dz;
-
-                grad_field.internal_field[center_idx] = Vector3::new(dp_dx, dp_dy, dp_dz);
+// Cell-centered ghost values put prescribed values at the boundary face,
+// half a cell from the center. Solid faces impose stationary no-slip walls.
+fn velocity_neighbors(
+    u: &VolVectorField,
+    geom: &Geometry,
+    neighbors: [Option<usize>; 6],
+    c: Vector3<f64>,
+) -> [Vector3<f64>; 6] {
+    let boundaries = u.boundary_field.faces();
+    std::array::from_fn(|face| match neighbors[face] {
+        Some(n) if !geom.is_solid[n] => u.internal_field[n],
+        Some(_) => -c,
+        None => match boundaries[face] {
+            BcType::FixedValue(v) => 2.0 * v - c,
+            BcType::ZeroGradient => c,
+            BcType::Slip => {
+                let mut v = c;
+                v[face / 2] = -v[face / 2];
+                v
             }
-        }
-    }
-
-    grad_field
+        },
+    })
 }
 
-pub fn div(vector_field: &VolVectorField, mesh: &Mesh, geom: &Geometry) -> VolScalarField {
-    let mut div_field = VolScalarField::new(mesh, 0.0);
-    for i in 0..mesh.nx {
+pub fn grad(p: &VolScalarField, mesh: &Mesh, geom: &Geometry) -> VolVectorField {
+    let mut result = VolVectorField::new(mesh, Vector3::zeros());
+    let boundaries = p.boundary_field.faces();
+    let h = [mesh.dx, mesh.dy, mesh.dz];
+    for k in 0..mesh.nz {
         for j in 0..mesh.ny {
-            for k in 0..mesh.nz {
-                let c_idx = mesh.cell_idx(i, j, k);
-                let u_center = vector_field.internal_field[c_idx];
-
-                let u_east = if i < mesh.nx - 1 {
-                    if geom.is_solid[mesh.cell_idx(i + 1, j, k)] { 0.0 } else { (vector_field.internal_field[mesh.cell_idx(i + 1, j, k)].x + u_center.x) / 2.0 }
-                } else {
-                    match vector_field.boundary_field.x_max {
-                        BcType::FixedValue(v) => v.x,
-                        BcType::ZeroGradient => u_center.x,
-                    }
-                };
-
-                let u_west = if i > 0 {
-                    if geom.is_solid[mesh.cell_idx(i - 1, j, k)] { 0.0 } else { (vector_field.internal_field[mesh.cell_idx(i - 1, j, k)].x + u_center.x) / 2.0 }
-                } else {
-                    match vector_field.boundary_field.x_min {
-                        BcType::FixedValue(v) => v.x,
-                        BcType::ZeroGradient => u_center.x,
-                    }
-                };
-                let du_dx = (u_east - u_west) / mesh.dx;
-
-                let v_north = if j < mesh.ny - 1 {
-                    if geom.is_solid[mesh.cell_idx(i, j + 1, k)] { 0.0 } else { (vector_field.internal_field[mesh.cell_idx(i, j + 1, k)].y + u_center.y) / 2.0 }
-                } else {
-                    match vector_field.boundary_field.y_max {
-                        BcType::FixedValue(v) => v.y,
-                        BcType::ZeroGradient => u_center.y,
-                    }
-                };
-                let v_south = if j > 0 {
-                    if geom.is_solid[mesh.cell_idx(i, j - 1, k)] { 0.0 } else { (vector_field.internal_field[mesh.cell_idx(i, j - 1, k)].y + u_center.y) / 2.0 }
-                } else {
-                    match vector_field.boundary_field.y_min {
-                        BcType::FixedValue(v) => v.y,
-                        BcType::ZeroGradient => u_center.y,
-                    }
-                };
-                let du_dy = (v_north - v_south) / mesh.dy;
-                let w_front = if k < mesh.nz - 1 {
-                    if geom.is_solid[mesh.cell_idx(i, j, k + 1)] { 0.0 } else { (vector_field.internal_field[mesh.cell_idx(i, j, k + 1)].z + u_center.z) / 2.0 }
-                } else {
-                    match vector_field.boundary_field.z_max {
-                        BcType::FixedValue(v) => v.z,
-                        BcType::ZeroGradient => u_center.z,
-                    }
-                };
-                let w_back = if k > 0 {
-                    if geom.is_solid[mesh.cell_idx(i, j, k - 1)] { 0.0 } else { (vector_field.internal_field[mesh.cell_idx(i, j, k - 1)].z + u_center.z) / 2.0 }
-                } else {
-                    match vector_field.boundary_field.z_min {
-                        BcType::FixedValue(v) => v.z,
-                        BcType::ZeroGradient => u_center.z,
-                    }
-                };
-                let du_dz = (w_front - w_back) / mesh.dz;
-
-                div_field.internal_field[c_idx] = du_dx + du_dy + du_dz;
+            for i in 0..mesh.nx {
+                let idx = mesh.cell_idx(i, j, k);
+                if geom.is_solid[idx] {
+                    continue;
+                }
+                let c = p.internal_field[idx];
+                let neighbors = mesh.neighbors(i, j, k);
+                let face: [f64; 6] = std::array::from_fn(|f| match neighbors[f] {
+                    Some(n) if !geom.is_solid[n] => 0.5 * (p.internal_field[n] + c),
+                    Some(_) => c,
+                    None => match boundaries[f] {
+                        BcType::FixedValue(v) => *v,
+                        _ => c,
+                    },
+                });
+                for axis in 0..3 {
+                    result.internal_field[idx][axis] =
+                        (face[2 * axis + 1] - face[2 * axis]) / h[axis];
+                }
             }
         }
     }
-    div_field
+    result
 }
 
-pub fn laplacian_vector(vector_field: &VolVectorField, mesh: &Mesh, geom: &Geometry) -> VolVectorField {
-    let mut laplacian_field = VolVectorField::new(mesh, Vector3::new(0.0, 0.0, 0.0));
-
-    for i in 0..mesh.nx {
+pub fn div(u: &VolVectorField, mesh: &Mesh, geom: &Geometry) -> VolScalarField {
+    let mut result = VolScalarField::new(mesh, 0.0);
+    let h = [mesh.dx, mesh.dy, mesh.dz];
+    for k in 0..mesh.nz {
         for j in 0..mesh.ny {
-            for k in 0..mesh.nz {
-                let c_idx = mesh.cell_idx(i, j, k);
-                let u_c = vector_field.internal_field[c_idx];
-
-                // For solid neighbors, mirror the center value (wall boundary)
-                let u_e = if i < mesh.nx - 1 {
-                    let idx = mesh.cell_idx(i + 1, j, k);
-                    if geom.is_solid[idx] { u_c } else { vector_field.internal_field[idx] }
-                } else {
-                    u_c
-                };
-                let u_w = if i > 0 {
-                    let idx = mesh.cell_idx(i - 1, j, k);
-                    if geom.is_solid[idx] { u_c } else { vector_field.internal_field[idx] }
-                } else {
-                    u_c
-                };
-                let u_n = if j < mesh.ny - 1 {
-                    let idx = mesh.cell_idx(i, j + 1, k);
-                    if geom.is_solid[idx] { u_c } else { vector_field.internal_field[idx] }
-                } else {
-                    u_c
-                };
-                let u_s = if j > 0 {
-                    let idx = mesh.cell_idx(i, j - 1, k);
-                    if geom.is_solid[idx] { u_c } else { vector_field.internal_field[idx] }
-                } else {
-                    u_c
-                };
-                let u_f = if k < mesh.nz - 1 {
-                    let idx = mesh.cell_idx(i, j, k + 1);
-                    if geom.is_solid[idx] { u_c } else { vector_field.internal_field[idx] }
-                } else {
-                    u_c
-                };
-                let u_b = if k > 0 {
-                    let idx = mesh.cell_idx(i, j, k - 1);
-                    if geom.is_solid[idx] { u_c } else { vector_field.internal_field[idx] }
-                } else {
-                    u_c
-                };
-                let d2u_dx2 = (u_e - 2.0 * u_c + u_w) / (mesh.dx * mesh.dx);
-                let d2u_dy2 = (u_n - 2.0 * u_c + u_s) / (mesh.dy * mesh.dy);
-                let d2u_dz2 = (u_f - 2.0 * u_c + u_b) / (mesh.dz * mesh.dz);
-
-                laplacian_field.internal_field[c_idx] = d2u_dx2 + d2u_dy2 + d2u_dz2;
+            for i in 0..mesh.nx {
+                let idx = mesh.cell_idx(i, j, k);
+                if geom.is_solid[idx] {
+                    continue;
+                }
+                let v = velocity_neighbors(u, geom, mesh.neighbors(i, j, k), u.internal_field[idx]);
+                for axis in 0..3 {
+                    result.internal_field[idx] +=
+                        (v[2 * axis + 1][axis] - v[2 * axis][axis]) / (2.0 * h[axis]);
+                }
             }
         }
     }
-
-    laplacian_field
+    result
 }
 
-pub fn convect(vector_field: &VolVectorField, mesh: &Mesh, geom: &Geometry) -> VolVectorField {
-    let mut convect_field = VolVectorField::new(mesh, Vector3::new(0.0, 0.0, 0.0));
-
-    for i in 0..mesh.nx {
+pub fn laplacian_vector(u: &VolVectorField, mesh: &Mesh, geom: &Geometry) -> VolVectorField {
+    let mut result = VolVectorField::new(mesh, Vector3::zeros());
+    let h = [mesh.dx, mesh.dy, mesh.dz];
+    for k in 0..mesh.nz {
         for j in 0..mesh.ny {
-            for k in 0..mesh.nz {
-                let c_idx = mesh.cell_idx(i, j, k);
-                let u_c = vector_field.internal_field[c_idx];
-
-                // Get neighbors — treat solid neighbors as walls (mirror center value)
-                let u_e = if i < mesh.nx - 1 {
-                    let idx = mesh.cell_idx(i + 1, j, k);
-                    if geom.is_solid[idx] { u_c } else { vector_field.internal_field[idx] }
-                } else { u_c };
-                let u_w = if i > 0 {
-                    let idx = mesh.cell_idx(i - 1, j, k);
-                    if geom.is_solid[idx] { u_c } else { vector_field.internal_field[idx] }
-                } else { u_c };
-
-                let u_n = if j < mesh.ny - 1 {
-                    let idx = mesh.cell_idx(i, j + 1, k);
-                    if geom.is_solid[idx] { u_c } else { vector_field.internal_field[idx] }
-                } else { u_c };
-                let u_s = if j > 0 {
-                    let idx = mesh.cell_idx(i, j - 1, k);
-                    if geom.is_solid[idx] { u_c } else { vector_field.internal_field[idx] }
-                } else { u_c };
-
-                let u_f = if k < mesh.nz - 1 {
-                    let idx = mesh.cell_idx(i, j, k + 1);
-                    if geom.is_solid[idx] { u_c } else { vector_field.internal_field[idx] }
-                } else { u_c };
-                let u_b = if k > 0 {
-                    let idx = mesh.cell_idx(i, j, k - 1);
-                    if geom.is_solid[idx] { u_c } else { vector_field.internal_field[idx] }
-                } else { u_c };
-
-                // Calculate spatial derivatives (Central Differencing)
-                // Note: du_dx is a Vector3 containing (du/dx, dv/dx, dw/dx)
-                let du_dx = if u_c.x >= 0.0 { (u_c - u_w) / mesh.dx } else { (u_e - u_c) / mesh.dx };
-                let du_dy = if u_c.y >= 0.0 { (u_c - u_s) / mesh.dy } else { (u_n - u_c) / mesh.dy };
-                let du_dz = if u_c.z >= 0.0 { (u_c - u_b) / mesh.dz } else { (u_f - u_c) / mesh.dz };
-
-                // (U • ∇) U = u*(dU/dx) + v*(dU/dy) + w*(dU/dz)
-                let convection = du_dx * u_c.x + du_dy * u_c.y + du_dz * u_c.z;
-
-                convect_field.internal_field[c_idx] = convection;
+            for i in 0..mesh.nx {
+                let idx = mesh.cell_idx(i, j, k);
+                if geom.is_solid[idx] {
+                    continue;
+                }
+                let c = u.internal_field[idx];
+                let v = velocity_neighbors(u, geom, mesh.neighbors(i, j, k), c);
+                for axis in 0..3 {
+                    result.internal_field[idx] +=
+                        (v[2 * axis + 1] - 2.0 * c + v[2 * axis]) / h[axis].powi(2);
+                }
             }
         }
     }
-    convect_field
+    result
+}
+
+pub fn convect(u: &VolVectorField, mesh: &Mesh, geom: &Geometry) -> VolVectorField {
+    let mut result = VolVectorField::new(mesh, Vector3::zeros());
+    let h = [mesh.dx, mesh.dy, mesh.dz];
+    for k in 0..mesh.nz {
+        for j in 0..mesh.ny {
+            for i in 0..mesh.nx {
+                let idx = mesh.cell_idx(i, j, k);
+                if geom.is_solid[idx] {
+                    continue;
+                }
+                let c = u.internal_field[idx];
+                let v = velocity_neighbors(u, geom, mesh.neighbors(i, j, k), c);
+                for axis in 0..3 {
+                    let derivative = if c[axis] >= 0.0 {
+                        (c - v[2 * axis]) / h[axis]
+                    } else {
+                        (v[2 * axis + 1] - c) / h[axis]
+                    };
+                    result.internal_field[idx] += derivative * c[axis];
+                }
+            }
+        }
+    }
+    result
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn linear_pressure_has_exact_gradient_including_boundary_cells() {
+        let mesh = Mesh::new(6, 4, 3, 6.0, 4.0, 3.0);
+        let geom = Geometry::new(&mesh);
+        let mut p = VolScalarField::new(&mesh, 0.0);
+        p.boundary_field.x_min = BcType::FixedValue(0.0);
+        p.boundary_field.x_max = BcType::FixedValue(6.0);
+        for k in 0..mesh.nz {
+            for j in 0..mesh.ny {
+                for i in 0..mesh.nx {
+                    p.internal_field[mesh.cell_idx(i, j, k)] = i as f64 + 0.5;
+                }
+            }
+        }
+        for v in grad(&p, &mesh, &geom).internal_field {
+            assert!((v - Vector3::x()).norm() < 1e-12);
+        }
+    }
+
+    #[test]
+    fn moving_wall_drives_diffusion_and_slip_blocks_normal_flux() {
+        let mesh = Mesh::new(4, 4, 4, 4.0, 4.0, 4.0);
+        let geom = Geometry::new(&mesh);
+        let mut u = VolVectorField::new(&mesh, Vector3::zeros());
+        u.boundary_field.y_max = BcType::FixedValue(Vector3::x());
+        let diffusion = laplacian_vector(&u, &mesh, &geom);
+        assert!((diffusion.internal_field[mesh.cell_idx(1, 3, 1)].x - 2.0).abs() < 1e-12);
+        assert_eq!(
+            diffusion.internal_field[mesh.cell_idx(1, 1, 1)],
+            Vector3::zeros()
+        );
+        u.internal_field.fill(Vector3::z());
+        u.boundary_field.z_min = BcType::Slip;
+        u.boundary_field.z_max = BcType::Slip;
+        let divergence = div(&u, &mesh, &geom);
+        assert!((divergence.internal_field[mesh.cell_idx(1, 1, 0)] - 1.0).abs() < 1e-12);
+        assert!((divergence.internal_field[mesh.cell_idx(1, 1, 3)] + 1.0).abs() < 1e-12);
+    }
+
+    #[test]
+    fn solids_have_no_divergence_and_enforce_no_slip_diffusion() {
+        let mesh = Mesh::new(4, 4, 4, 4.0, 4.0, 4.0);
+        let mut geom = Geometry::new(&mesh);
+        geom.is_solid[mesh.cell_idx(2, 1, 1)] = true;
+        let u = VolVectorField::new(&mesh, Vector3::x());
+        assert_eq!(
+            div(&u, &mesh, &geom).internal_field[mesh.cell_idx(2, 1, 1)],
+            0.0
+        );
+        assert!(
+            (laplacian_vector(&u, &mesh, &geom).internal_field[mesh.cell_idx(1, 1, 1)].x + 2.0)
+                .abs()
+                < 1e-12
+        );
+    }
 }

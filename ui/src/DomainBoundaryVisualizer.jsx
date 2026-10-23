@@ -1,5 +1,4 @@
 import { useLoader } from '@react-three/fiber';
-import { Center } from '@react-three/drei';
 import { STLLoader } from 'three/examples/jsm/loaders/STLLoader';
 import * as THREE from 'three';
 
@@ -108,9 +107,9 @@ export default function DomainBoundaryVisualizer({ boundaries, geometryType, cyl
       )}
 
       {geometryType === 'stl' && stlUrl && (
-        <Center>
+        <group position={[-50, -50, -30]}>
           <StlModel fileUrl={stlUrl} />
-        </Center>
+        </group>
       )}
 
       {/* Voxelized Obstacles returned by solver */}

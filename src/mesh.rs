@@ -32,4 +32,15 @@ impl Mesh {
     pub fn cell_idx(&self, i: usize, j: usize, k: usize) -> usize {
         i + j * self.nx + k * self.nx * self.ny
     }
+
+    pub fn neighbors(&self, i: usize, j: usize, k: usize) -> [Option<usize>; 6] {
+        [
+            (i > 0).then(|| self.cell_idx(i - 1, j, k)),
+            (i + 1 < self.nx).then(|| self.cell_idx(i + 1, j, k)),
+            (j > 0).then(|| self.cell_idx(i, j - 1, k)),
+            (j + 1 < self.ny).then(|| self.cell_idx(i, j + 1, k)),
+            (k > 0).then(|| self.cell_idx(i, j, k - 1)),
+            (k + 1 < self.nz).then(|| self.cell_idx(i, j, k + 1)),
+        ]
+    }
 }

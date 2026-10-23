@@ -7,6 +7,8 @@ pub enum BcType<T> {
     FixedValue(T),
     //Neumann
     ZeroGradient,
+    // Impermeable velocity boundary with zero tangential gradient.
+    Slip,
 }
 
 #[derive(Clone)]
@@ -20,6 +22,16 @@ pub struct BoundaryField<T> {
 }
 
 impl<T: Clone> BoundaryField<T> {
+    pub fn faces(&self) -> [&BcType<T>; 6] {
+        [
+            &self.x_min,
+            &self.x_max,
+            &self.y_min,
+            &self.y_max,
+            &self.z_min,
+            &self.z_max,
+        ]
+    }
     pub fn new_zero_gradient() -> Self {
         Self {
             x_min: BcType::ZeroGradient,

@@ -4,7 +4,8 @@ const LAYERS = [
   { id: 'domain', label: 'Domain Wireframe', icon: <Box size={13} /> },
   { id: 'geometry', label: 'Geometry', icon: <Database size={13} /> },
   { id: 'slice', label: 'Cut Plane (Z-mid)', icon: <Grid3x3 size={13} /> },
-  { id: 'fluidBody', label: 'Fluid Body (3D)', icon: <Layers size={13} /> },
+  { id: 'streamlines', label: 'Streamlines (3D)', icon: <Wind size={13} /> },
+  { id: 'fluidBody', label: 'Voxel Context (3D)', icon: <Layers size={13} /> },
   { id: 'vectors', label: 'Vector Glyphs', icon: <Wind size={13} /> },
 ];
 
