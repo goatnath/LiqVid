@@ -6,7 +6,7 @@ A lightweight 3D computational fluid dynamics project written from scratch in Ru
 
 This is a learning project. Operator and integration tests cover selected numerical behaviors, but a quantitative comparison against a reference CFD benchmark is still outstanding.
 
-![LiqVid cylinder-flow UI with 3D streamlines, geometry, and divergence history](docs/media/cylinder-ui.png)
+
 
 ![Cylinder-flow snapshots showing the evolving streamline field](docs/media/cylinder-flow.gif)
 
