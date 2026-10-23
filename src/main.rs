@@ -100,9 +100,9 @@ async fn run_simulation(
 
         let nx = 50;
         let ny = 50;
-        let nz = 50;
+        let nz = 30;
 
-        let mesh = Mesh::new(nx, ny, nz, 100.0, 100.0, 100.0);
+        let mesh = Mesh::new(nx, ny, nz, 100.0, 100.0, 60.0);
         let mut p = VolScalarField::new(&mesh, 0.0);
         let mut u = VolVectorField::new(&mesh, Vector3::new(0.0, 0.0, 0.0));
         let dt = 0.1;
@@ -162,7 +162,7 @@ async fn run_simulation(
             for i in 0..mesh.num_cells() {
                 if geom.is_solid[i] { continue; }
                 let div_val = div_u.internal_field[i];
-                source.internal_field[i] = div_val / dt;
+                source.internal_field[i] = payload.density.max(1.0e-12) * div_val / dt;
 
                 if div_val.abs() > max_div_u {
                     max_div_u = div_val.abs();
@@ -174,7 +174,7 @@ async fn run_simulation(
 
             for i in 0..mesh.num_cells() {
                 if !geom.is_solid[i] {
-                    u.internal_field[i] -= grad_p.internal_field[i] * dt;
+                    u.internal_field[i] -= grad_p.internal_field[i] * (dt / payload.density.max(1.0e-12));
                 }
             }
             
@@ -199,6 +199,9 @@ async fn run_simulation(
                 let mid_k = mesh.nz / 2;
                 let mut slice_grid = Vec::with_capacity(mesh.nx * mesh.ny);
                 let mut pressure_slice = Vec::with_capacity(mesh.nx * mesh.ny);
+                let mut vx_slice = Vec::with_capacity(mesh.nx * mesh.ny);
+                let mut vy_slice = Vec::with_capacity(mesh.nx * mesh.ny);
+                let mut vz_slice = Vec::with_capacity(mesh.nx * mesh.ny);
                 
                 for fj in 0..mesh.ny {
                     for fi in 0..mesh.nx {
@@ -206,11 +209,13 @@ async fn run_simulation(
                         if geom.is_solid[fidx] {
                             slice_grid.push(-1.0);
                             pressure_slice.push(-999.0);
+                            vx_slice.push(-999.0); vy_slice.push(-999.0); vz_slice.push(-999.0);
                         } else {
                             let vel = u.internal_field[fidx];
                             let mag = (vel.x * vel.x + vel.y * vel.y + vel.z * vel.z).sqrt();
                             slice_grid.push(mag);
                             pressure_slice.push(p.internal_field[fidx]);
+                            vx_slice.push(vel.x); vy_slice.push(vel.y); vz_slice.push(vel.z);
                         }
                     }
                 }
@@ -267,6 +272,9 @@ async fn run_simulation(
                         "cells": frame_cells,
                         "slice": slice_grid,
                         "pressure_slice": pressure_slice,
+                        "vx_slice": vx_slice,
+                        "vy_slice": vy_slice,
+                        "vz_slice": vz_slice,
                         "nx": mesh.nx,
                         "ny": mesh.ny,
                         "nz": mesh.nz,
@@ -279,7 +287,9 @@ async fn run_simulation(
                         "p_min": p_min,
                         "p_max": p_max,
                         "fluid_cells": fluid_count,
-                        "nu": payload.kinematic_viscosity
+                        "nu": payload.kinematic_viscosity,
+                        "density": payload.density,
+                        "lx": mesh.lx, "ly": mesh.ly, "lz": mesh.lz
                     })) {
                         let msg = format!("[FRAME]{}", frame_json);
                         let _ = tx.send(Ok(Event::default().data(msg))).await;
@@ -306,15 +316,12 @@ async fn run_simulation(
             for j in 0..mesh.ny {
                 let idx = mesh.cell_idx(i, j, k);
                 let vel = u.internal_field[idx];
-                
-                // Calculate the magnitude (speed) of the vector
                 let mag = (vel.x * vel.x + vel.y * vel.y + vel.z * vel.z).sqrt();
-                
                 slice_data.push(serde_json::json!({
-                    "x": (i as f64 + 0.5) * mesh.dx - 50.0,
-                    "y": (j as f64 + 0.5) * mesh.dy - 50.0,
-                    "z": 0.0, // The UI draws this flat on the Z=0 plane
-                    "mag": mag
+                    "x": (i as f64 + 0.5) * mesh.dx - mesh.lx / 2.0,
+                    "y": (j as f64 + 0.5) * mesh.dy - mesh.ly / 2.0,
+                    "z": 0.0, "mag": mag, "vx": vel.x, "vy": vel.y, "vz": vel.z,
+                    "p": p.internal_field[idx], "solid": geom.is_solid[idx]
                 }));
             }
         }

@@ -71,6 +71,9 @@ export default function Viewport({
           <ContinuousFluidSlice
             sliceData={frameData.slice}
             pressureSlice={frameData.pressure_slice}
+            vxSlice={frameData.vx_slice}
+            vySlice={frameData.vy_slice}
+            vzSlice={frameData.vz_slice}
             nx={frameData.nx || 50}
             ny={frameData.ny || 50}
             minMag={minMag}
@@ -117,7 +120,7 @@ export default function Viewport({
             <span className="pv-colorbar-tick">{minMag.toFixed(2)}</span>
           </div>
         </div>
-        <div className="pv-colorbar-title">{activeField === 'pressure' ? 'P [Pa]' : '|U| [m/s]'}</div>
+        <div className="pv-colorbar-title">{activeField === 'pressure' ? 'P [Pa]' : activeField === 'vx' ? 'Ux [m/s]' : activeField === 'vy' ? 'Uy [m/s]' : activeField === 'vz' ? 'Uz [m/s]' : '|U| [m/s]'}</div>
       </div>
     </div>
   );

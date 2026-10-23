@@ -3,7 +3,7 @@ import * as THREE from 'three';
 import { getCfdColor } from './colormap';
 
 // Continuous 2D Cut Plane — supports multiple field types
-export function ContinuousFluidSlice({ sliceData, pressureSlice, nx = 50, ny = 50, minMag = 0.0, maxMag = 1.0, sliceZ = 0, activeField = 'velocity_mag' }) {
+export function ContinuousFluidSlice({ sliceData, pressureSlice, vxSlice, vySlice, vzSlice, nx = 50, ny = 50, minMag = 0.0, maxMag = 1.0, sliceZ = 0, activeField = 'velocity_mag' }) {
   const canvasRef = useRef(null);
   const textureRef = useRef(null);
 
@@ -19,7 +19,7 @@ export function ContinuousFluidSlice({ sliceData, pressureSlice, nx = 50, ny = 5
 
   useMemo(() => {
     const isPressure = activeField === 'pressure';
-    const data = isPressure ? pressureSlice : sliceData;
+    const data = isPressure ? pressureSlice : activeField === 'vx' ? vxSlice : activeField === 'vy' ? vySlice : activeField === 'vz' ? vzSlice : sliceData;
     if (!data || data.length === 0) return;
 
     const canvas = canvasRef.current;
@@ -41,8 +41,8 @@ export function ContinuousFluidSlice({ sliceData, pressureSlice, nx = 50, ny = 5
     if (!isFinite(fieldMin)) fieldMin = 0;
     if (!isFinite(fieldMax)) fieldMax = 1;
 
-    const useMin = isPressure ? fieldMin : minMag;
-    const useMax = isPressure ? fieldMax : maxMag;
+    const useMin = activeField === 'velocity_mag' ? minMag : fieldMin;
+    const useMax = activeField === 'velocity_mag' ? maxMag : fieldMax;
 
     for (let j = 0; j < ny; j++) {
       for (let i = 0; i < nx; i++) {
@@ -67,7 +67,7 @@ export function ContinuousFluidSlice({ sliceData, pressureSlice, nx = 50, ny = 5
 
     ctx.putImageData(imgData, 0, 0);
     textureRef.current.needsUpdate = true;
-  }, [sliceData, pressureSlice, nx, ny, minMag, maxMag, activeField]);
+  }, [sliceData, pressureSlice, vxSlice, vySlice, vzSlice, nx, ny, minMag, maxMag, activeField]);
 
   useEffect(() => {
     return () => {
@@ -78,7 +78,7 @@ export function ContinuousFluidSlice({ sliceData, pressureSlice, nx = 50, ny = 5
     };
   }, []);
 
-  const data = activeField === 'pressure' ? pressureSlice : sliceData;
+  const data = activeField === 'pressure' ? pressureSlice : activeField === 'vx' ? vxSlice : activeField === 'vy' ? vySlice : activeField === 'vz' ? vzSlice : sliceData;
   if (!data || data.length === 0) return null;
 
   return (
